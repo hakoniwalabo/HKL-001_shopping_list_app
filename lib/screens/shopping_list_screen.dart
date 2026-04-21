@@ -18,12 +18,18 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   // ★ 追加＋編集 共通ダイアログ
   void _showAddItemDialog({Item? item}) {
-    final nameController = TextEditingController(text: item?.name ?? '');
-    final priceController = TextEditingController(
-      text: item?.price.toString() ?? '',
+    final nameController = TextEditingController(
+      text: item?.name == '未入力' ? '' : item?.name ?? '',
     );
+
+    final priceController = TextEditingController(
+      text: item != null && item.price != 0 ? item.price.toString() : '',
+    );
+
     final taxController = TextEditingController(
-      text: item != null ? (item.taxRate * 100).toInt().toString() : '10',
+      text: item != null && item.taxRate != 0
+          ? (item.taxRate * 100).toString()
+          : '',
     );
 
     showDialog(
@@ -35,7 +41,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Autocomplete<String>(
-                initialValue: TextEditingValue(text: item?.name ?? ''),
                 optionsBuilder: (textEditingValue) {
                   if (textEditingValue.text.isEmpty) {
                     return const Iterable<String>.empty();
@@ -52,7 +57,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 fieldViewBuilder:
                     (context, controller, focusNode, onEditingComplete) {
                       return TextField(
-                        controller: controller,
+                        controller: nameController,
                         focusNode: focusNode,
                         decoration: const InputDecoration(labelText: '商品名'),
                       );
