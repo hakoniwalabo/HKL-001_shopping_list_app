@@ -14,6 +14,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     Item(name: 'パン', price: 200, taxRate: 0.1),
   ];
 
+  List<String> get itemNameHistory => items.map((e) => e.name).toSet().toList();
+
   // ★ 追加＋編集 共通ダイアログ
   void _showAddItemDialog({Item? item}) {
     final nameController = TextEditingController(text: item?.name ?? '');
@@ -32,9 +34,29 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: '商品名'),
+              Autocomplete<String>(
+                initialValue: TextEditingValue(text: item?.name ?? ''),
+                optionsBuilder: (textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return const Iterable<String>.empty();
+                  }
+                  return itemNameHistory.where(
+                    (option) => option.toLowerCase().contains(
+                      textEditingValue.text.toLowerCase(),
+                    ),
+                  );
+                },
+                onSelected: (selection) {
+                  nameController.text = selection;
+                },
+                fieldViewBuilder:
+                    (context, controller, focusNode, onEditingComplete) {
+                      return TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(labelText: '商品名'),
+                      );
+                    },
               ),
               TextField(
                 controller: priceController,
@@ -55,7 +77,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                final name = nameController.text;
+                final name = nameController.text.isNotEmpty
+                    ? nameController.text
+                    : '';
                 final price = int.tryParse(priceController.text) ?? 0;
                 final taxPercent = double.tryParse(taxController.text) ?? 0;
                 final tax = taxPercent / 100.0;
