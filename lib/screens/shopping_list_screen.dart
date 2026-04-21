@@ -79,12 +79,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               onPressed: () {
                 final name = nameController.text.isNotEmpty
                     ? nameController.text
-                    : '';
+                    : '未入力';
                 final price = int.tryParse(priceController.text) ?? 0;
                 final taxPercent = double.tryParse(taxController.text) ?? 0;
                 final tax = taxPercent / 100.0;
-
-                if (name.isEmpty || price <= 0) return;
 
                 setState(() {
                   if (item == null) {
