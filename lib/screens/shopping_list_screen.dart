@@ -1,3 +1,4 @@
+import '../database/database_helper.dart';
 import 'package:flutter/material.dart';
 import '../models/item.dart';
 
@@ -9,12 +10,29 @@ class ShoppingListScreen extends StatefulWidget {
 }
 
 class _ShoppingListScreenState extends State<ShoppingListScreen> {
-  List<Item> items = [
-    Item(name: 'りんご', price: 100, taxRate: 0.1),
-    Item(name: 'パン', price: 200, taxRate: 0.1),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    loadItems();
+    loadHistory();
+  }
 
-  List<String> get itemNameHistory => items.map((e) => e.name).toSet().toList();
+  Future<void> loadItems() async {
+    final data = await DatabaseHelper.instance.getItems();
+    setState(() {
+      items = data;
+    });
+  }
+
+  Future<void> loadHistory() async {
+    final data = await DatabaseHelper.instance.getHistoryNames();
+    setState(() {
+      historyNames = data;
+    });
+  }
+
+  List<Item> items = [];
+  List<String> historyNames = [];
 
   // ★ 追加＋編集 共通ダイアログ
   void _showAddItemDialog({Item? item}) {
@@ -47,7 +65,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   if (textEditingValue.text.isEmpty) {
                     return const Iterable<String>.empty();
                   }
-                  return itemNameHistory.where(
+                  return historyNames.where(
                     (option) => option.toLowerCase().contains(
                       textEditingValue.text.toLowerCase(),
                     ),
@@ -87,7 +105,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               child: const Text('キャンセル'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 final name = autoController.text.isNotEmpty
                     ? autoController.text
                     : '未入力';
@@ -96,17 +114,27 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 final taxPercent = double.tryParse(taxController.text) ?? 0;
                 final tax = taxPercent / 100.0;
 
-                setState(() {
-                  if (item == null) {
-                    // 新規追加
-                    items.add(Item(name: name, price: price, taxRate: tax));
-                  } else {
-                    // 編集（上書き）
-                    item.name = name;
-                    item.price = price;
-                    item.taxRate = tax;
-                  }
-                });
+                if (item == null) {
+                  final newItem = Item(
+                    name: name,
+                    price: price,
+                    taxRate: tax,
+                    isChecked: false,
+                  );
+
+                  await DatabaseHelper.instance.insertItem(newItem);
+                } else {
+                  item.name = name;
+                  item.price = price;
+                  item.taxRate = tax;
+
+                  await DatabaseHelper.instance.updateItem(item);
+                }
+
+                await DatabaseHelper.instance.upsertHistory(name);
+
+                await loadItems(); // ← ここでUI更新
+                await loadHistory();
 
                 Navigator.pop(context);
               },
@@ -163,10 +191,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                           '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
                         ),
                         value: item.isChecked,
-                        onChanged: (value) {
-                          setState(() {
-                            item.isChecked = value!;
-                          });
+                        onChanged: (value) async {
+                          item.isChecked = value!;
+
+                          await DatabaseHelper.instance.updateItem(item);
+                          await loadItems();
                         },
                       );
                     },
@@ -218,10 +247,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                           '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
                         ),
                         value: item.isChecked,
-                        onChanged: (value) {
-                          setState(() {
-                            item.isChecked = value!;
-                          });
+                        onChanged: (value) async {
+                          item.isChecked = value!;
+
+                          await DatabaseHelper.instance.updateItem(item);
+                          await loadItems();
                         },
                       );
                     },
