@@ -18,10 +18,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   // ★ 追加＋編集 共通ダイアログ
   void _showAddItemDialog({Item? item}) {
-    final nameController = TextEditingController(
+    TextEditingController autoController = TextEditingController(
       text: item?.name == '未入力' ? '' : item?.name ?? '',
     );
-
     final priceController = TextEditingController(
       text: item != null && item.price != 0 ? item.price.toString() : '',
     );
@@ -41,6 +40,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Autocomplete<String>(
+                initialValue: TextEditingValue(
+                  text: item?.name == '未入力' ? '' : item?.name ?? '',
+                ),
                 optionsBuilder: (textEditingValue) {
                   if (textEditingValue.text.isEmpty) {
                     return const Iterable<String>.empty();
@@ -52,12 +54,16 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   );
                 },
                 onSelected: (selection) {
-                  nameController.text = selection;
+                  autoController.text = selection;
                 },
                 fieldViewBuilder:
                     (context, controller, focusNode, onEditingComplete) {
+                      controller.addListener(() {
+                        autoController.text = controller.text;
+                      });
+
                       return TextField(
-                        controller: nameController,
+                        controller: controller,
                         focusNode: focusNode,
                         decoration: const InputDecoration(labelText: '商品名'),
                       );
@@ -82,9 +88,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                final name = nameController.text.isNotEmpty
-                    ? nameController.text
+                final name = autoController.text.isNotEmpty
+                    ? autoController.text
                     : '未入力';
+
                 final price = int.tryParse(priceController.text) ?? 0;
                 final taxPercent = double.tryParse(taxController.text) ?? 0;
                 final tax = taxPercent / 100.0;
