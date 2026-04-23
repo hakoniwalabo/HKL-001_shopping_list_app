@@ -1,6 +1,6 @@
-import '../database/database_helper.dart';
 import 'package:flutter/material.dart';
 import '../models/item.dart';
+import '../database/database_helper.dart';
 
 class ShoppingListScreen extends StatefulWidget {
   const ShoppingListScreen({super.key});
@@ -10,6 +10,9 @@ class ShoppingListScreen extends StatefulWidget {
 }
 
 class _ShoppingListScreenState extends State<ShoppingListScreen> {
+  List<Item> items = [];
+  List<String> historyNames = [];
+
   @override
   void initState() {
     super.initState();
@@ -19,6 +22,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   Future<void> loadItems() async {
     final data = await DatabaseHelper.instance.getItems();
+
+    data.sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
+
     setState(() {
       items = data;
     });
@@ -31,18 +37,24 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     });
   }
 
-  List<Item> items = [];
-  List<String> historyNames = [];
+  List<Item> get uncheckedItems => items.where((e) => !e.isChecked).toList();
+  List<Item> get checkedItems => items.where((e) => e.isChecked).toList();
 
-  // ★ 追加＋編集 共通ダイアログ
+  double get uncheckedSubtotal => uncheckedItems.fold(0, (s, e) => s + e.price);
+  double get uncheckedTotal =>
+      uncheckedItems.fold(0, (s, e) => s + e.price * (1 + e.taxRate));
+
+  double get checkedSubtotal => checkedItems.fold(0, (s, e) => s + e.price);
+  double get checkedTotal =>
+      checkedItems.fold(0, (s, e) => s + e.price * (1 + e.taxRate));
+
   void _showAddItemDialog({Item? item}) {
-    TextEditingController autoController = TextEditingController(
+    final autoController = TextEditingController(
       text: item?.name == '未入力' ? '' : item?.name ?? '',
     );
     final priceController = TextEditingController(
       text: item != null && item.price != 0 ? item.price.toString() : '',
     );
-
     final taxController = TextEditingController(
       text: item != null && item.taxRate != 0
           ? (item.taxRate * 100).toString()
@@ -58,12 +70,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Autocomplete<String>(
-                initialValue: TextEditingValue(
-                  text: item?.name == '未入力' ? '' : item?.name ?? '',
-                ),
                 optionsBuilder: (textEditingValue) {
                   if (textEditingValue.text.isEmpty) {
-                    return const Iterable<String>.empty();
+                    return historyNames;
                   }
                   return historyNames.where(
                     (option) => option.toLowerCase().contains(
@@ -76,6 +85,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 },
                 fieldViewBuilder:
                     (context, controller, focusNode, onEditingComplete) {
+                      controller.text = autoController.text;
                       controller.addListener(() {
                         autoController.text = controller.text;
                       });
@@ -120,22 +130,22 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                     price: price,
                     taxRate: tax,
                     isChecked: false,
+                    sortOrder: items.length,
                   );
-
                   await DatabaseHelper.instance.insertItem(newItem);
                 } else {
                   item.name = name;
                   item.price = price;
                   item.taxRate = tax;
-
                   await DatabaseHelper.instance.updateItem(item);
                 }
 
                 await DatabaseHelper.instance.upsertHistory(name);
 
-                await loadItems(); // ← ここでUI更新
+                await loadItems();
                 await loadHistory();
 
+                if (!mounted) return;
                 Navigator.pop(context);
               },
               child: Text(item == null ? '追加' : '更新'),
@@ -146,134 +156,147 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     );
   }
 
-  List<Item> get uncheckedItems => items.where((e) => !e.isChecked).toList();
+  Widget _buildUncheckedItem(Item item, int index) {
+    return ListTile(
+      key: ValueKey('${item.id}_${item.isChecked}'),
+      leading: Checkbox(
+        value: item.isChecked,
+        onChanged: (value) async {
+          if (value == null) return;
+          setState(() {
+            item.isChecked = value;
+          });
+          await DatabaseHelper.instance.updateItem(item);
+          await loadItems(); // ← OK（順序重要）
+        },
+      ),
+      title: GestureDetector(
+        onTap: () => _showAddItemDialog(item: item),
+        child: Text(item.name),
+      ),
+      subtitle: Text(
+        '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
+      ),
+      trailing: ReorderableDragStartListener(
+        index: index,
+        child: const Icon(Icons.drag_handle),
+      ),
+    );
+  }
 
-  List<Item> get checkedItems => items.where((e) => e.isChecked).toList();
-
-  double get uncheckedSubtotal => uncheckedItems.fold(0, (s, e) => s + e.price);
-
-  double get uncheckedTotal =>
-      uncheckedItems.fold(0, (s, e) => s + e.price * (1 + e.taxRate));
-
-  double get checkedSubtotal => checkedItems.fold(0, (s, e) => s + e.price);
-
-  double get checkedTotal =>
-      checkedItems.fold(0, (s, e) => s + e.price * (1 + e.taxRate));
+  Widget _buildCheckedItem(Item item) {
+    return ListTile(
+      leading: Checkbox(
+        value: item.isChecked,
+        onChanged: (value) async {
+          if (value == null) return;
+          setState(() {
+            item.isChecked = value;
+          });
+          await DatabaseHelper.instance.updateItem(item);
+          await loadItems();
+        },
+      ),
+      title: GestureDetector(
+        onTap: () => _showAddItemDialog(item: item),
+        child: Text(
+          item.name,
+          style: const TextStyle(decoration: TextDecoration.lineThrough),
+        ),
+      ),
+      subtitle: Text(
+        '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final list = uncheckedItems;
+
     return Scaffold(
       appBar: AppBar(title: const Text('買い物リスト')),
-      body: Column(
+      body: ListView(
         children: [
-          // ===== 未購入 =====
-          Expanded(
-            child: Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text(
-                    '未購入',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: uncheckedItems.length,
-                    itemBuilder: (context, index) {
-                      final item = uncheckedItems[index];
-                      return CheckboxListTile(
-                        title: GestureDetector(
-                          onTap: () => _showAddItemDialog(item: item), // ★ 編集
-                          child: Text(item.name),
-                        ),
-                        subtitle: Text(
-                          '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
-                        ),
-                        value: item.isChecked,
-                        onChanged: (value) async {
-                          item.isChecked = value!;
+          const Padding(
+            padding: EdgeInsets.all(8),
+            child: Text('未購入', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
 
-                          await DatabaseHelper.instance.updateItem(item);
-                          await loadItems();
-                        },
-                      );
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('税別合計: ¥${uncheckedSubtotal.toInt()}'),
-                      Text('税込合計: ¥${uncheckedTotal.toInt()}'),
-                    ],
-                  ),
-                ),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('税別合計: ¥${uncheckedSubtotal.toInt()}'),
+                Text('税込合計: ¥${uncheckedTotal.toInt()}'),
               ],
             ),
+          ),
+
+          ReorderableListView(
+            buildDefaultDragHandles: false,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            onReorder: (oldIndex, newIndex) async {
+              if (newIndex > oldIndex) newIndex--;
+
+              // 元リスト内の対象インデックスを取得
+              final targetList = items.where((e) => !e.isChecked).toList();
+
+              final movedItem = targetList[oldIndex];
+
+              // items上の位置を取得
+              final oldIndexInItems = items.indexOf(movedItem);
+
+              // 削除
+              items.removeAt(oldIndexInItems);
+
+              // 挿入位置を計算
+              final newTarget = targetList[newIndex];
+              final newIndexInItems = items.indexOf(newTarget);
+
+              items.insert(newIndexInItems, movedItem);
+
+              // sortOrder更新
+              for (int i = 0; i < items.length; i++) {
+                items[i].sortOrder = i;
+                await DatabaseHelper.instance.updateItem(items[i]);
+              }
+
+              await loadItems();
+            },
+            children: [
+              for (int i = 0; i < list.length; i++)
+                _buildUncheckedItem(list[i], i),
+            ],
           ),
 
           const Divider(),
 
-          // ===== 購入済 =====
-          Expanded(
-            child: Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text(
-                    '購入済',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: checkedItems.length,
-                    itemBuilder: (context, index) {
-                      final item = checkedItems[index];
-                      return CheckboxListTile(
-                        title: GestureDetector(
-                          onTap: () => _showAddItemDialog(item: item), // ★ 編集
-                          child: Text(
-                            item.name,
-                            style: const TextStyle(
-                              decoration: TextDecoration.lineThrough,
-                            ),
-                          ),
-                        ),
-                        subtitle: Text(
-                          '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
-                        ),
-                        value: item.isChecked,
-                        onChanged: (value) async {
-                          item.isChecked = value!;
-
-                          await DatabaseHelper.instance.updateItem(item);
-                          await loadItems();
-                        },
-                      );
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('税別合計: ¥${checkedSubtotal.toInt()}'),
-                      Text('税込合計: ¥${checkedTotal.toInt()}'),
-                    ],
-                  ),
-                ),
-              ],
+          if (checkedItems.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: Text('購入済', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
-          ),
+
+          if (checkedItems.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('税別合計: ¥${checkedSubtotal.toInt()}'),
+                  Text('税込合計: ¥${checkedTotal.toInt()}'),
+                ],
+              ),
+            ),
+
+          ...checkedItems.map(_buildCheckedItem),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddItemDialog(), // ★ 追加
+        onPressed: () => _showAddItemDialog(),
         child: const Icon(Icons.add),
       ),
     );

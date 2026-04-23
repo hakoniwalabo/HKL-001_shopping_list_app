@@ -29,7 +29,8 @@ CREATE TABLE items(
   price INTEGER,
   taxRate REAL,
   isChecked INTEGER,
-  createdAt INTEGER
+  createdAt INTEGER,
+  sortOrder INTEGER
 )
 ''');
 
