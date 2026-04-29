@@ -12,6 +12,7 @@ class ShoppingListScreen extends StatefulWidget {
 class _ShoppingListScreenState extends State<ShoppingListScreen> {
   List<Item> items = [];
   List<String> historyNames = [];
+  Item? _deletedItem;
 
   @override
   void initState() {
@@ -22,8 +23,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   Future<void> loadItems() async {
     final data = await DatabaseHelper.instance.getItems();
-
-    data.sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
 
     setState(() {
       items = data;
@@ -116,6 +115,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
+                final navigator = Navigator.of(context); // ←先に取得
                 final name = autoController.text.isNotEmpty
                     ? autoController.text
                     : '未入力';
@@ -146,7 +146,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 await loadHistory();
 
                 if (!mounted) return;
-                Navigator.pop(context);
+                navigator.pop(); // ←安全
               },
               child: Text(item == null ? '追加' : '更新'),
             ),
@@ -157,55 +157,144 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   }
 
   Widget _buildUncheckedItem(Item item, int index) {
-    return ListTile(
+    return Dismissible(
       key: ValueKey('${item.id}_${item.isChecked}'),
-      leading: Checkbox(
-        value: item.isChecked,
-        onChanged: (value) async {
-          if (value == null) return;
-          setState(() {
-            item.isChecked = value;
-          });
-          await DatabaseHelper.instance.updateItem(item);
-          await loadItems(); // ← OK（順序重要）
-        },
+      direction: DismissDirection.endToStart,
+
+      background: Container(
+        color: Colors.red,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: const Icon(Icons.delete, color: Colors.white),
       ),
-      title: GestureDetector(
-        onTap: () => _showAddItemDialog(item: item),
-        child: Text(item.name),
-      ),
-      subtitle: Text(
-        '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
-      ),
-      trailing: ReorderableDragStartListener(
-        index: index,
-        child: const Icon(Icons.drag_handle),
+
+      onDismissed: (_) async {
+        setState(() {
+          _deletedItem = item;
+        });
+
+        await DatabaseHelper.instance.deleteItem(item.id!);
+
+        if (!mounted) return; // ←追加
+
+        await loadItems();
+
+        if (!mounted) return; // ←追加
+
+        final messenger = ScaffoldMessenger.of(context); // ←ここで取得
+
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('削除しました'),
+            action: SnackBarAction(
+              label: '元に戻す',
+              onPressed: () async {
+                if (_deletedItem != null) {
+                  await DatabaseHelper.instance.insertItemWithId(_deletedItem!);
+
+                  if (!mounted) return; // ←追加
+
+                  await loadItems();
+                }
+              },
+            ),
+          ),
+        );
+      },
+
+      child: ListTile(
+        leading: Checkbox(
+          value: item.isChecked,
+          onChanged: (value) async {
+            if (value == null) return;
+            setState(() {
+              item.isChecked = value;
+            });
+            await DatabaseHelper.instance.updateItem(item);
+            await loadItems();
+          },
+        ),
+        title: GestureDetector(
+          onTap: () => _showAddItemDialog(item: item),
+          child: Text(item.name),
+        ),
+        subtitle: Text(
+          '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
+        ),
+        trailing: ReorderableDragStartListener(
+          index: index,
+          child: const Icon(Icons.drag_handle),
+        ),
       ),
     );
   }
 
   Widget _buildCheckedItem(Item item) {
-    return ListTile(
-      leading: Checkbox(
-        value: item.isChecked,
-        onChanged: (value) async {
-          if (value == null) return;
-          setState(() {
-            item.isChecked = value;
-          });
-          await DatabaseHelper.instance.updateItem(item);
-          await loadItems();
-        },
+    return Dismissible(
+      key: ValueKey('${item.id}_${item.isChecked}'),
+      direction: DismissDirection.endToStart,
+
+      background: Container(
+        color: Colors.red,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: const Icon(Icons.delete, color: Colors.white),
       ),
-      title: GestureDetector(
-        onTap: () => _showAddItemDialog(item: item),
-        child: Text(
-          item.name,
-          style: const TextStyle(decoration: TextDecoration.lineThrough),
+
+      onDismissed: (_) async {
+        _deletedItem = item;
+
+        await DatabaseHelper.instance.deleteItem(item.id!);
+
+        if (!mounted) return;
+
+        await loadItems();
+
+        if (!mounted) return;
+
+        final messenger = ScaffoldMessenger.of(context);
+
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('削除しました'),
+            action: SnackBarAction(
+              label: '元に戻す',
+              onPressed: () async {
+                if (_deletedItem == null) return;
+
+                await DatabaseHelper.instance.insertItemWithId(_deletedItem!);
+
+                if (!mounted) return;
+
+                await loadItems();
+              },
+            ),
+          ),
+        );
+      },
+
+      child: ListTile(
+        leading: Checkbox(
+          value: item.isChecked,
+          onChanged: (value) async {
+            if (value == null) return;
+            setState(() {
+              item.isChecked = value;
+            });
+            await DatabaseHelper.instance.updateItem(item);
+            await loadItems();
+          },
         ),
-      ),
-      subtitle: Text(
-        '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
+        title: GestureDetector(
+          onTap: () => _showAddItemDialog(item: item),
+          child: Text(
+            item.name,
+            style: const TextStyle(decoration: TextDecoration.lineThrough),
+          ),
+        ),
+        subtitle: Text(
+          '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
+        ),
       ),
     );
   }
@@ -241,28 +330,25 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             onReorder: (oldIndex, newIndex) async {
               if (newIndex > oldIndex) newIndex--;
 
-              // 元リスト内の対象インデックスを取得
-              final targetList = items.where((e) => !e.isChecked).toList();
+              final list = uncheckedItems;
 
-              final movedItem = targetList[oldIndex];
+              // 並び替え（未購入リスト内）
+              final movedItem = list.removeAt(oldIndex);
+              list.insert(newIndex, movedItem);
 
-              // items上の位置を取得
-              final oldIndexInItems = items.indexOf(movedItem);
+              // items全体を再構築
+              final newItems = [
+                ...list, // 未購入（並び替え済み）
+                ...checkedItems, // 購入済（そのまま）
+              ];
 
-              // 削除
-              items.removeAt(oldIndexInItems);
-
-              // 挿入位置を計算
-              final newTarget = targetList[newIndex];
-              final newIndexInItems = items.indexOf(newTarget);
-
-              items.insert(newIndexInItems, movedItem);
-
-              // sortOrder更新
-              for (int i = 0; i < items.length; i++) {
-                items[i].sortOrder = i;
-                await DatabaseHelper.instance.updateItem(items[i]);
+              // sortOrderを再割り当て
+              for (int i = 0; i < newItems.length; i++) {
+                newItems[i].sortOrder = i;
               }
+
+              // DB更新（まとめて）
+              await DatabaseHelper.instance.updateSortOrders(newItems);
 
               await loadItems();
             },

@@ -48,14 +48,34 @@ CREATE TABLE item_history(
   // items CRUD
   // -------------------------
 
+  // 通常追加（idは自動）
   Future<int> insertItem(Item item) async {
-    final db = await instance.database;
-    return await db.insert('items', item.toMap());
+    final db = await database;
+
+    final map = item.toMap();
+    map.remove('id'); // ←ここ重要
+    map['createdAt'] ??= DateTime.now().millisecondsSinceEpoch;
+
+    return await db.insert('items', map);
+  }
+
+  // Undo用（完全復元）
+  Future<void> insertItemWithId(Item item) async {
+    final db = await database;
+
+    await db.insert(
+      'items',
+      item.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<List<Item>> getItems() async {
     final db = await instance.database;
-    final result = await db.query('items');
+    final result = await db.query(
+      'items',
+      orderBy: 'sortOrder IS NULL, sortOrder ASC',
+    );
 
     return result.map((e) => Item.fromMap(e)).toList();
   }
@@ -73,6 +93,24 @@ CREATE TABLE item_history(
   Future<int> deleteItem(int id) async {
     final db = await instance.database;
     return await db.delete('items', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> updateSortOrders(List<Item> items) async {
+    final db = await database;
+
+    await db.transaction((txn) async {
+      for (int i = 0; i < items.length; i++) {
+        final item = items[i];
+        item.sortOrder = i;
+
+        await txn.update(
+          'items',
+          {'sortOrder': i},
+          where: 'id = ?',
+          whereArgs: [item.id],
+        );
+      }
+    });
   }
 
   // -------------------------

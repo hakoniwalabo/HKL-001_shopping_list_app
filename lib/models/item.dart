@@ -12,9 +12,9 @@ class Item {
     required this.price,
     required this.taxRate,
     this.isChecked = false,
-    this.createdAt,
+    int? createdAt,
     this.sortOrder,
-  });
+  }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
   Map<String, dynamic> toMap() {
     return {
@@ -23,7 +23,7 @@ class Item {
       'price': price,
       'taxRate': taxRate,
       'isChecked': isChecked ? 1 : 0,
-      'createdAt': createdAt ?? DateTime.now().millisecondsSinceEpoch,
+      'createdAt': createdAt,
       'sortOrder': sortOrder,
     };
   }
