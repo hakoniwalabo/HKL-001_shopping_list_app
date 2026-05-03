@@ -98,19 +98,18 @@ CREATE TABLE item_history(
   Future<void> updateSortOrders(List<Item> items) async {
     final db = await database;
 
-    await db.transaction((txn) async {
-      for (int i = 0; i < items.length; i++) {
-        final item = items[i];
-        item.sortOrder = i;
+    final batch = db.batch();
 
-        await txn.update(
-          'items',
-          {'sortOrder': i},
-          where: 'id = ?',
-          whereArgs: [item.id],
-        );
-      }
-    });
+    for (final item in items) {
+      batch.update(
+        'items',
+        {'sortOrder': item.sortOrder},
+        where: 'id = ?',
+        whereArgs: [item.id],
+      );
+    }
+
+    await batch.commit(noResult: true);
   }
 
   // -------------------------
