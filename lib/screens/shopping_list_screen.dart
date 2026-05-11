@@ -125,13 +125,22 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 final tax = taxPercent / 100.0;
 
                 if (item == null) {
+                  // 既存を後ろへずらす
+                  for (final e in items) {
+                    e.sortOrder = (e.sortOrder ?? 0) + 1;
+                  }
+
+                  await DatabaseHelper.instance.updateSortOrders(items);
+
+                  // 新規を先頭へ
                   final newItem = Item(
                     name: name,
                     price: price,
                     taxRate: tax,
                     isChecked: false,
-                    sortOrder: items.length,
+                    sortOrder: 0,
                   );
+
                   await DatabaseHelper.instance.insertItem(newItem);
                 } else {
                   item.name = name;
