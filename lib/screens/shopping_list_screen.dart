@@ -1,32 +1,24 @@
 import 'package:flutter/material.dart';
 import '../models/item.dart';
 import '../database/database_helper.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/item_provider.dart';
 
-class ShoppingListScreen extends StatefulWidget {
+class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
 
   @override
-  State<ShoppingListScreen> createState() => _ShoppingListScreenState();
+  ConsumerState<ShoppingListScreen> createState() => _ShoppingListScreenState();
 }
 
-class _ShoppingListScreenState extends State<ShoppingListScreen> {
-  List<Item> items = [];
+class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
   List<String> historyNames = [];
   Item? _deletedItem;
 
   @override
   void initState() {
     super.initState();
-    loadItems();
     loadHistory();
-  }
-
-  Future<void> loadItems() async {
-    final data = await DatabaseHelper.instance.getItems();
-
-    setState(() {
-      items = data;
-    });
   }
 
   Future<void> loadHistory() async {
@@ -36,18 +28,25 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     });
   }
 
-  List<Item> get uncheckedItems => items.where((e) => !e.isChecked).toList();
-  List<Item> get checkedItems => items.where((e) => e.isChecked).toList();
+  List<Item> uncheckedItems(List<Item> items) =>
+      items.where((e) => !e.isChecked).toList();
 
-  double get uncheckedSubtotal => uncheckedItems.fold(0, (s, e) => s + e.price);
-  double get uncheckedTotal =>
-      uncheckedItems.fold(0, (s, e) => s + e.price * (1 + e.taxRate));
+  List<Item> checkedItems(List<Item> items) =>
+      items.where((e) => e.isChecked).toList();
 
-  double get checkedSubtotal => checkedItems.fold(0, (s, e) => s + e.price);
-  double get checkedTotal =>
-      checkedItems.fold(0, (s, e) => s + e.price * (1 + e.taxRate));
+  double uncheckedSubtotal(List<Item> items) =>
+      uncheckedItems(items).fold(0, (s, e) => s + e.price);
 
-  void _showAddItemDialog({Item? item}) {
+  double uncheckedTotal(List<Item> items) =>
+      uncheckedItems(items).fold(0, (s, e) => s + e.price * (1 + e.taxRate));
+
+  double checkedSubtotal(List<Item> items) =>
+      checkedItems(items).fold(0, (s, e) => s + e.price);
+
+  double checkedTotal(List<Item> items) =>
+      checkedItems(items).fold(0, (s, e) => s + e.price * (1 + e.taxRate));
+
+  void _showAddItemDialog({Item? item, required List<Item> items}) {
     final autoController = TextEditingController(
       text: item?.name == '未入力' ? '' : item?.name ?? '',
     );
@@ -151,7 +150,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
                 await DatabaseHelper.instance.upsertHistory(name);
 
-                await loadItems();
+                ref.invalidate(itemListProvider);
                 await loadHistory();
 
                 if (!mounted) return;
@@ -191,7 +190,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
         if (!mounted) return; // ←追加
 
-        await loadItems();
+        ref.invalidate(itemListProvider);
 
         if (!mounted) return; // ←追加
 
@@ -208,7 +207,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
                   if (!mounted) return; // ←追加
 
-                  await loadItems();
+                  ref.invalidate(itemListProvider);
                 }
               },
             ),
@@ -221,14 +220,17 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           value: item.isChecked,
           onChanged: (value) async {
             if (value == null) return;
-            setState(() {
-              item.isChecked = value;
-            });
+
+            item.isChecked = value;
+
             await DatabaseHelper.instance.updateItem(item);
-            await loadItems();
+            ref.invalidate(itemListProvider);
           },
         ),
-        onTap: () => _showAddItemDialog(item: item),
+        onTap: () => _showAddItemDialog(
+          item: item,
+          items: ref.read(itemListProvider).value ?? [],
+        ),
         title: Text(
           item.name,
           style: TextStyle(
@@ -273,7 +275,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
         if (!mounted) return;
 
-        await loadItems();
+        ref.invalidate(itemListProvider);
 
         if (!mounted) return;
 
@@ -291,7 +293,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
                 if (!mounted) return;
 
-                await loadItems();
+                ref.invalidate(itemListProvider);
               },
             ),
           ),
@@ -303,15 +305,18 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           value: item.isChecked,
           onChanged: (value) async {
             if (value == null) return;
-            setState(() {
-              item.isChecked = value;
-            });
+
+            item.isChecked = value;
+
             await DatabaseHelper.instance.updateItem(item);
-            await loadItems();
+            ref.invalidate(itemListProvider);
           },
         ),
 
-        onTap: () => _showAddItemDialog(item: item),
+        onTap: () => _showAddItemDialog(
+          item: item,
+          items: ref.read(itemListProvider).value ?? [],
+        ),
         title: Text(
           item.name,
           style: TextStyle(
@@ -329,112 +334,118 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final list = uncheckedItems;
+    final itemAsync = ref.watch(itemListProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('買い物リスト')),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: items.isEmpty
-            ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.shopping_cart_outlined,
-                      size: 64,
-                      color: Colors.grey,
-                    ),
-                    SizedBox(height: 16),
-                    Text('＋ボタンから追加してください'),
-                  ],
-                ),
-              )
-            : ListView(
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Text(
-                      '未購入',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
+        child: itemAsync.when(
+          data: (items) {
+            final unchecked = uncheckedItems(items);
+            final checked = checkedItems(items);
 
-                  Padding(
-                    padding: const EdgeInsets.all(8),
+            return items.isEmpty
+                ? const Center(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text('税別合計: ¥${uncheckedSubtotal.toInt()}'),
-                        Text('税込合計: ¥${uncheckedTotal.toInt()}'),
+                        Icon(
+                          Icons.shopping_cart_outlined,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 16),
+                        Text('＋ボタンから追加してください'),
                       ],
                     ),
-                  ),
-
-                  ReorderableListView(
-                    buildDefaultDragHandles: false,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    onReorder: (oldIndex, newIndex) async {
-                      if (newIndex > oldIndex) newIndex--;
-
-                      final list = uncheckedItems;
-
-                      // 並び替え（未購入リスト内）
-                      final movedItem = list.removeAt(oldIndex);
-                      list.insert(newIndex, movedItem);
-
-                      // items全体を再構築
-                      final newItems = [
-                        ...list, // 未購入（並び替え済み）
-                        ...checkedItems, // 購入済（そのまま）
-                      ];
-
-                      // sortOrderを再割り当て
-                      for (int i = 0; i < newItems.length; i++) {
-                        newItems[i].sortOrder = i;
-                      }
-
-                      // DB更新（まとめて）
-                      await DatabaseHelper.instance.updateSortOrders(newItems);
-
-                      await loadItems();
-                    },
+                  )
+                : ListView(
                     children: [
-                      for (int i = 0; i < list.length; i++)
-                        _buildUncheckedItem(list[i], i),
-                    ],
-                  ),
-
-                  const Divider(thickness: 1.5),
-
-                  if (checkedItems.isNotEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Text(
-                        '購入済',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                      const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text(
+                          '未購入',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
-                    ),
 
-                  if (checkedItems.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('税別合計: ¥${uncheckedSubtotal(items).toInt()}'),
+                            Text('税込合計: ¥${uncheckedTotal(items).toInt()}'),
+                          ],
+                        ),
+                      ),
+
+                      ReorderableListView(
+                        buildDefaultDragHandles: false,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        onReorder: (oldIndex, newIndex) async {
+                          if (newIndex > oldIndex) newIndex--;
+
+                          final movedItem = unchecked.removeAt(oldIndex);
+
+                          unchecked.insert(newIndex, movedItem);
+
+                          final newItems = [...unchecked, ...checked];
+
+                          for (int i = 0; i < newItems.length; i++) {
+                            newItems[i].sortOrder = i;
+                          }
+
+                          await DatabaseHelper.instance.updateSortOrders(
+                            newItems,
+                          );
+
+                          ref.invalidate(itemListProvider);
+                        },
                         children: [
-                          Text('税別合計: ¥${checkedSubtotal.toInt()}'),
-                          Text('税込合計: ¥${checkedTotal.toInt()}'),
+                          for (int i = 0; i < unchecked.length; i++)
+                            _buildUncheckedItem(unchecked[i], i),
                         ],
                       ),
-                    ),
 
-                  ...checkedItems.map(_buildCheckedItem),
-                ],
-              ),
+                      const Divider(thickness: 1.5),
+
+                      if (checked.isNotEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Text(
+                            '購入済',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+
+                      if (checked.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('税別合計: ¥${checkedSubtotal(items).toInt()}'),
+                              Text('税込合計: ¥${checkedTotal(items).toInt()}'),
+                            ],
+                          ),
+                        ),
+
+                      ...checked.map(_buildCheckedItem),
+                    ],
+                  );
+          },
+
+          loading: () => const Center(child: CircularProgressIndicator()),
+
+          error: (error, stack) => Center(child: Text('Error: $error')),
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddItemDialog(),
+        onPressed: () =>
+            _showAddItemDialog(items: ref.read(itemListProvider).value ?? []),
         icon: const Icon(Icons.add),
         label: const Text('追加'),
       ),
