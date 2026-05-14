@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'screens/shopping_list_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'screens/shopping_list_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: MyApp()));
@@ -11,6 +12,24 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(home: ShoppingListScreen());
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.deepPurple,
+        brightness: Brightness.light,
+      ),
+
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.deepPurple,
+        brightness: Brightness.dark,
+      ),
+
+      themeMode: ThemeMode.system,
+
+      home: const ShoppingListScreen(),
+    );
   }
 }

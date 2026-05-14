@@ -13,7 +13,8 @@ class ShoppingListScreen extends ConsumerStatefulWidget {
 
 class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
   List<String> historyNames = [];
-  Item? _deletedItem;
+  final List<Item> _deletedItems = [];
+  List<Item> _deletedCheckedItems = [];
 
   @override
   void initState() {
@@ -140,23 +141,98 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                     sortOrder: 0,
                   );
 
-                  await DatabaseHelper.instance.insertItem(newItem);
+                  await ref.read(itemProvider.notifier).addItem(newItem);
                 } else {
                   item.name = name;
                   item.price = price;
                   item.taxRate = tax;
-                  await DatabaseHelper.instance.updateItem(item);
+                  await ref.read(itemProvider.notifier).updateItem(item);
                 }
 
                 await DatabaseHelper.instance.upsertHistory(name);
 
-                ref.invalidate(itemListProvider);
                 await loadHistory();
 
                 if (!mounted) return;
                 navigator.pop(); // ←安全
               },
               child: Text(item == null ? '追加' : '更新'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDeleteCheckedDialog() {
+    showDialog(
+      context: context,
+
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('購入済みを削除'),
+
+          content: const Text('購入済みの商品をすべて削除しますか？'),
+
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+
+              child: const Text('キャンセル'),
+            ),
+
+            FilledButton(
+              onPressed: () async {
+                final navigator = Navigator.of(context);
+
+                final checkedItemsToDelete = checkedItems(
+                  ref.read(itemProvider).value ?? [],
+                );
+
+                _deletedCheckedItems = List.from(checkedItemsToDelete);
+
+                final messenger = ScaffoldMessenger.of(context);
+
+                await ref.read(itemProvider.notifier).deleteCheckedItems();
+
+                if (!mounted) return;
+
+                navigator.pop();
+
+                messenger.clearSnackBars();
+
+                final snackBar = SnackBar(
+                  duration: const Duration(seconds: 5),
+
+                  content: Text('${_deletedCheckedItems.length}件削除しました'),
+
+                  action: SnackBarAction(
+                    label: '元に戻す',
+
+                    onPressed: () async {
+                      for (final item in _deletedCheckedItems) {
+                        await ref
+                            .read(itemProvider.notifier)
+                            .restoreItemWithOrder(item);
+                      }
+
+                      _deletedCheckedItems.clear();
+                    },
+                  ),
+                );
+
+                final controller = messenger.showSnackBar(snackBar);
+
+                controller.closed.then((reason) {
+                  if (reason != SnackBarClosedReason.action) {
+                    _deletedCheckedItems.clear();
+                  }
+                });
+              },
+
+              child: const Text('削除'),
             ),
           ],
         );
@@ -184,35 +260,45 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
       ),
 
       onDismissed: (_) async {
-        _deletedItem = item;
+        _deletedItems.add(item);
 
-        await DatabaseHelper.instance.deleteItem(item.id!);
-
-        if (!mounted) return; // ←追加
-
-        ref.invalidate(itemListProvider);
+        await ref.read(itemProvider.notifier).deleteItem(item.id!);
 
         if (!mounted) return; // ←追加
 
-        final messenger = ScaffoldMessenger.of(context); // ←ここで取得
+        final messenger = ScaffoldMessenger.of(context);
 
-        messenger.showSnackBar(
-          SnackBar(
-            content: const Text('削除しました'),
-            action: SnackBarAction(
-              label: '元に戻す',
-              onPressed: () async {
-                if (_deletedItem != null) {
-                  await DatabaseHelper.instance.insertItemWithId(_deletedItem!);
+        messenger.clearSnackBars();
 
-                  if (!mounted) return; // ←追加
+        final snackBar = SnackBar(
+          duration: const Duration(seconds: 5),
 
-                  ref.invalidate(itemListProvider);
-                }
-              },
-            ),
+          content: Text('削除しました'),
+
+          action: SnackBarAction(
+            label: '元に戻す',
+
+            onPressed: () async {
+              if (_deletedItems.isEmpty) return;
+
+              final restoredItem = _deletedItems.removeLast();
+
+              await ref
+                  .read(itemProvider.notifier)
+                  .restoreItemWithOrder(restoredItem);
+
+              await ref.read(itemProvider.notifier).normalizeSortOrder();
+            },
           ),
         );
+
+        final controller = messenger.showSnackBar(snackBar);
+
+        controller.closed.then((reason) {
+          if (reason != SnackBarClosedReason.action) {
+            _deletedItems.remove(item);
+          }
+        });
       },
 
       child: ListTile(
@@ -223,13 +309,12 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
             item.isChecked = value;
 
-            await DatabaseHelper.instance.updateItem(item);
-            ref.invalidate(itemListProvider);
+            await ref.read(itemProvider.notifier).updateItem(item);
           },
         ),
         onTap: () => _showAddItemDialog(
           item: item,
-          items: ref.read(itemListProvider).value ?? [],
+          items: ref.read(itemProvider).value ?? [],
         ),
         title: Text(
           item.name,
@@ -269,35 +354,45 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
       ),
 
       onDismissed: (_) async {
-        _deletedItem = item;
+        _deletedItems.add(item);
 
-        await DatabaseHelper.instance.deleteItem(item.id!);
-
-        if (!mounted) return;
-
-        ref.invalidate(itemListProvider);
+        await ref.read(itemProvider.notifier).deleteItem(item.id!);
 
         if (!mounted) return;
 
         final messenger = ScaffoldMessenger.of(context);
 
-        messenger.showSnackBar(
-          SnackBar(
-            content: const Text('削除しました'),
-            action: SnackBarAction(
-              label: '元に戻す',
-              onPressed: () async {
-                if (_deletedItem == null) return;
+        messenger.clearSnackBars();
 
-                await DatabaseHelper.instance.insertItemWithId(_deletedItem!);
+        final snackBar = SnackBar(
+          duration: const Duration(seconds: 5),
 
-                if (!mounted) return;
+          content: Text('削除しました'),
 
-                ref.invalidate(itemListProvider);
-              },
-            ),
+          action: SnackBarAction(
+            label: '元に戻す',
+
+            onPressed: () async {
+              if (_deletedItems.isEmpty) return;
+
+              final restoredItem = _deletedItems.removeLast();
+
+              await ref
+                  .read(itemProvider.notifier)
+                  .restoreItemWithOrder(restoredItem);
+
+              await ref.read(itemProvider.notifier).normalizeSortOrder();
+            },
           ),
         );
+
+        final controller = messenger.showSnackBar(snackBar);
+
+        controller.closed.then((reason) {
+          if (reason != SnackBarClosedReason.action) {
+            _deletedItems.remove(item);
+          }
+        });
       },
 
       child: ListTile(
@@ -308,14 +403,13 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
             item.isChecked = value;
 
-            await DatabaseHelper.instance.updateItem(item);
-            ref.invalidate(itemListProvider);
+            await ref.read(itemProvider.notifier).updateItem(item);
           },
         ),
 
         onTap: () => _showAddItemDialog(
           item: item,
-          items: ref.read(itemListProvider).value ?? [],
+          items: ref.read(itemProvider).value ?? [],
         ),
         title: Text(
           item.name,
@@ -334,10 +428,23 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final itemAsync = ref.watch(itemListProvider);
+    final itemAsync = ref.watch(itemProvider);
+
+    final items = itemAsync.value ?? [];
+    final checked = checkedItems(items);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('買い物リスト')),
+      appBar: AppBar(
+        title: const Text('買い物リスト'),
+
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_sweep),
+
+            onPressed: checked.isEmpty ? null : _showDeleteCheckedDialog,
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: itemAsync.when(
@@ -398,11 +505,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                             newItems[i].sortOrder = i;
                           }
 
-                          await DatabaseHelper.instance.updateSortOrders(
-                            newItems,
-                          );
-
-                          ref.invalidate(itemListProvider);
+                          await ref
+                              .read(itemProvider.notifier)
+                              .updateSortOrders(newItems);
                         },
                         children: [
                           for (int i = 0; i < unchecked.length; i++)
@@ -445,7 +550,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () =>
-            _showAddItemDialog(items: ref.read(itemListProvider).value ?? []),
+            _showAddItemDialog(items: ref.read(itemProvider).value ?? []),
         icon: const Icon(Icons.add),
         label: const Text('追加'),
       ),

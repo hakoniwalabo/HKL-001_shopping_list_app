@@ -1,7 +1,85 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../database/database_helper.dart';
 import '../models/item.dart';
 
-final itemListProvider = FutureProvider<List<Item>>((ref) async {
-  return await DatabaseHelper.instance.getItems();
-});
+class ItemNotifier extends AsyncNotifier<List<Item>> {
+  @override
+  Future<List<Item>> build() async {
+    return await DatabaseHelper.instance.getItems();
+  }
+
+  Future<void> refreshItems() async {
+    state = const AsyncLoading();
+
+    state = await AsyncValue.guard(() async {
+      return await DatabaseHelper.instance.getItems();
+    });
+  }
+
+  Future<void> addItem(Item item) async {
+    await DatabaseHelper.instance.insertItem(item);
+
+    await refreshItems();
+  }
+
+  Future<void> updateItem(Item item) async {
+    await DatabaseHelper.instance.updateItem(item);
+
+    await refreshItems();
+  }
+
+  Future<void> deleteItem(int id) async {
+    await DatabaseHelper.instance.deleteItem(id);
+
+    await refreshItems();
+  }
+
+  Future<void> updateSortOrders(List<Item> items) async {
+    await DatabaseHelper.instance.updateSortOrders(items);
+
+    await refreshItems();
+  }
+
+  Future<void> deleteCheckedItems() async {
+    await DatabaseHelper.instance.deleteCheckedItems();
+
+    await refreshItems();
+  }
+
+  Future<void> restoreItem(Item item) async {
+    await DatabaseHelper.instance.insertItemWithId(item);
+
+    await refreshItems();
+  }
+
+  Future<void> restoreItemWithOrder(Item item) async {
+    await DatabaseHelper.instance.insertItemWithId(item);
+
+    final current = state.value ?? [];
+
+    final updated = [...current, item];
+
+    updated.sort((a, b) {
+      return (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0);
+    });
+
+    state = AsyncData(updated);
+  }
+
+  Future<void> normalizeSortOrder() async {
+    final items = state.value ?? [];
+
+    for (int i = 0; i < items.length; i++) {
+      items[i].sortOrder = i;
+    }
+
+    await DatabaseHelper.instance.updateSortOrders(items);
+
+    state = AsyncData([...items]);
+  }
+}
+
+final itemProvider = AsyncNotifierProvider<ItemNotifier, List<Item>>(
+  ItemNotifier.new,
+);

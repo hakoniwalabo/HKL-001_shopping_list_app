@@ -95,6 +95,12 @@ CREATE TABLE item_history(
     return await db.delete('items', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> deleteCheckedItems() async {
+    final db = await instance.database;
+
+    await db.delete('items', where: 'isChecked = ?', whereArgs: [1]);
+  }
+
   Future<void> updateSortOrders(List<Item> items) async {
     final db = await database;
 
