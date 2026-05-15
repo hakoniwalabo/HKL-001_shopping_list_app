@@ -125,20 +125,12 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                 final tax = taxPercent / 100.0;
 
                 if (item == null) {
-                  // 既存を後ろへずらす
-                  for (final e in items) {
-                    e.sortOrder = (e.sortOrder ?? 0) + 1;
-                  }
-
-                  await DatabaseHelper.instance.updateSortOrders(items);
-
-                  // 新規を先頭へ
                   final newItem = Item(
                     name: name,
                     price: price,
                     taxRate: tax,
                     isChecked: false,
-                    sortOrder: 0,
+                    sortOrder: items.length,
                   );
 
                   await ref.read(itemProvider.notifier).addItem(newItem);
@@ -286,8 +278,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
               await ref
                   .read(itemProvider.notifier)
                   .restoreItemWithOrder(restoredItem);
-
-              await ref.read(itemProvider.notifier).normalizeSortOrder();
             },
           ),
         );
@@ -380,8 +370,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
               await ref
                   .read(itemProvider.notifier)
                   .restoreItemWithOrder(restoredItem);
-
-              await ref.read(itemProvider.notifier).normalizeSortOrder();
             },
           ),
         );

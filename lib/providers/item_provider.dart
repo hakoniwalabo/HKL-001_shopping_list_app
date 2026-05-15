@@ -18,6 +18,10 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
   }
 
   Future<void> addItem(Item item) async {
+    final current = state.value ?? [];
+
+    item.sortOrder = current.length;
+
     await DatabaseHelper.instance.insertItem(item);
 
     await refreshItems();
@@ -56,15 +60,9 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
   Future<void> restoreItemWithOrder(Item item) async {
     await DatabaseHelper.instance.insertItemWithId(item);
 
-    final current = state.value ?? [];
+    await refreshItems();
 
-    final updated = [...current, item];
-
-    updated.sort((a, b) {
-      return (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0);
-    });
-
-    state = AsyncData(updated);
+    await normalizeSortOrder();
   }
 
   Future<void> normalizeSortOrder() async {

@@ -72,10 +72,7 @@ CREATE TABLE item_history(
 
   Future<List<Item>> getItems() async {
     final db = await instance.database;
-    final result = await db.query(
-      'items',
-      orderBy: 'sortOrder IS NULL, sortOrder ASC',
-    );
+    final result = await db.query('items', orderBy: 'sortOrder ASC');
 
     return result.map((e) => Item.fromMap(e)).toList();
   }
@@ -112,6 +109,27 @@ CREATE TABLE item_history(
         {'sortOrder': item.sortOrder},
         where: 'id = ?',
         whereArgs: [item.id],
+      );
+    }
+
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> normalizeAllSortOrders() async {
+    final db = await database;
+
+    final result = await db.query('items', orderBy: 'sortOrder ASC');
+
+    final items = result.map((e) => Item.fromMap(e)).toList();
+
+    final batch = db.batch();
+
+    for (int i = 0; i < items.length; i++) {
+      batch.update(
+        'items',
+        {'sortOrder': i},
+        where: 'id = ?',
+        whereArgs: [items[i].id],
       );
     }
 

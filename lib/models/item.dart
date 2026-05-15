@@ -5,7 +5,7 @@ class Item {
   bool isChecked;
   int? id;
   int? createdAt;
-  int? sortOrder;
+  int sortOrder;
 
   Item({
     required this.name,
@@ -13,7 +13,7 @@ class Item {
     required this.taxRate,
     this.isChecked = false,
     int? createdAt,
-    this.sortOrder,
+    this.sortOrder = 0,
   }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
   Map<String, dynamic> toMap() {
