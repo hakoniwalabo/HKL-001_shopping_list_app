@@ -179,15 +179,13 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
               onPressed: () async {
                 final navigator = Navigator.of(context);
 
-                final checkedItemsToDelete = checkedItems(
-                  ref.read(itemProvider).value ?? [],
-                );
-
-                _deletedCheckedItems = List.from(checkedItemsToDelete);
-
                 final messenger = ScaffoldMessenger.of(context);
 
-                await ref.read(itemProvider.notifier).deleteCheckedItems();
+                final deletedItems = await ref
+                    .read(itemProvider.notifier)
+                    .deleteCheckedItemsWithUndo();
+
+                _deletedCheckedItems = List.from(deletedItems);
 
                 if (!mounted) return;
 
@@ -252,10 +250,13 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
       ),
 
       onDismissed: (_) async {
-        _deletedItems.add(item);
+        final deleted = await ref
+            .read(itemProvider.notifier)
+            .deleteItemById(item.id!);
 
-        await ref.read(itemProvider.notifier).deleteItem(item.id!);
-
+        if (deleted != null) {
+          _deletedItems.add(deleted);
+        }
         if (!mounted) return; // ←追加
 
         final messenger = ScaffoldMessenger.of(context);
@@ -297,9 +298,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
           onChanged: (value) async {
             if (value == null) return;
 
-            item.isChecked = value;
-
-            await ref.read(itemProvider.notifier).updateItem(item);
+            await ref.read(itemProvider.notifier).toggleCheck(item.id!);
           },
         ),
         onTap: () => _showAddItemDialog(
@@ -344,9 +343,13 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
       ),
 
       onDismissed: (_) async {
-        _deletedItems.add(item);
+        final deleted = await ref
+            .read(itemProvider.notifier)
+            .deleteItemById(item.id!);
 
-        await ref.read(itemProvider.notifier).deleteItem(item.id!);
+        if (deleted != null) {
+          _deletedItems.add(deleted);
+        }
 
         if (!mounted) return;
 
@@ -389,9 +392,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
           onChanged: (value) async {
             if (value == null) return;
 
-            item.isChecked = value;
-
-            await ref.read(itemProvider.notifier).updateItem(item);
+            await ref.read(itemProvider.notifier).toggleCheck(item.id!);
           },
         ),
 
@@ -481,21 +482,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         onReorder: (oldIndex, newIndex) async {
-                          if (newIndex > oldIndex) newIndex--;
-
-                          final movedItem = unchecked.removeAt(oldIndex);
-
-                          unchecked.insert(newIndex, movedItem);
-
-                          final newItems = [...unchecked, ...checked];
-
-                          for (int i = 0; i < newItems.length; i++) {
-                            newItems[i].sortOrder = i;
-                          }
-
                           await ref
                               .read(itemProvider.notifier)
-                              .updateSortOrders(newItems);
+                              .reorderUncheckedItems(oldIndex, newIndex);
                         },
                         children: [
                           for (int i = 0; i < unchecked.length; i++)
