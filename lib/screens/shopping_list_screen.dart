@@ -135,10 +135,13 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
                   await ref.read(itemProvider.notifier).addItem(newItem);
                 } else {
-                  item.name = name;
-                  item.price = price;
-                  item.taxRate = tax;
-                  await ref.read(itemProvider.notifier).updateItem(item);
+                  final updatedItem = item.copyWith(
+                    name: name,
+                    price: price,
+                    taxRate: tax,
+                  );
+
+                  await ref.read(itemProvider.notifier).updateItem(updatedItem);
                 }
 
                 await DatabaseHelper.instance.upsertHistory(name);
