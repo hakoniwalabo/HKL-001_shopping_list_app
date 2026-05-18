@@ -99,11 +99,15 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                 controller: priceController,
                 decoration: const InputDecoration(labelText: '金額'),
                 keyboardType: TextInputType.number,
+                maxLength: 8,
               ),
               TextField(
                 controller: taxController,
                 decoration: const InputDecoration(labelText: '税率（%）'),
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                maxLength: 5,
               ),
             ],
           ),
@@ -115,13 +119,29 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
             ElevatedButton(
               onPressed: () async {
                 final navigator = Navigator.of(context); // ←先に取得
-                final name = autoController.text.isNotEmpty
-                    ? autoController.text
-                    : '未入力';
+                final trimmedName = autoController.text.trim();
 
-                final price = int.tryParse(priceController.text) ?? 0;
-                final taxPercent = double.tryParse(taxController.text) ?? 0;
-                final tax = taxPercent / 100.0;
+                final name = trimmedName.isNotEmpty ? trimmedName : '未入力';
+
+                final price = int.tryParse(priceController.text);
+
+                if (price == null || price < 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('金額は0以上の数字を入力してください')),
+                  );
+
+                  return;
+                }
+                final taxPercent = double.tryParse(taxController.text);
+
+                if (taxPercent == null || taxPercent < 0 || taxPercent > 100) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('税率は0〜100で入力してください')),
+                  );
+
+                  return;
+                }
+                final tax = taxPercent / 100;
 
                 if (item == null) {
                   final newItem = Item(
