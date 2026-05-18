@@ -7,7 +7,7 @@ class Item {
   final int createdAt;
   final int sortOrder;
 
-  const Item({
+  Item({
     required this.name,
     required this.price,
     required this.taxRate,

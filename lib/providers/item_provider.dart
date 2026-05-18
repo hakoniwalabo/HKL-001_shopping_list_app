@@ -20,21 +20,33 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
   Future<void> addItem(Item item) async {
     final current = state.value ?? [];
 
-    item.sortOrder = current.length;
+    final newItem = item.copyWith(sortOrder: current.length);
 
-    await DatabaseHelper.instance.insertItem(item);
+    final id = await DatabaseHelper.instance.insertItem(newItem);
 
-    await refreshItems();
+    final insertedItem = newItem.copyWith(id: id);
+
+    state = AsyncData([...current, insertedItem]);
   }
 
   Future<void> updateItem(Item item) async {
-    await DatabaseHelper.instance.updateItem(item);
+    final current = state.value ?? [];
 
-    await refreshItems();
+    final updated = current.map((e) {
+      if (e.id == item.id) {
+        return item;
+      }
+
+      return e;
+    }).toList();
+
+    state = AsyncData(updated);
+
+    await DatabaseHelper.instance.updateItem(item);
   }
 
   Future<void> toggleCheck(int id) async {
-    final current = state.valueOrNull ?? [];
+    final current = state.value ?? [];
 
     final updated = current.map((item) {
       if (item.id == id) {
@@ -52,7 +64,7 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
   }
 
   Future<void> reorderUncheckedItems(int oldIndex, int newIndex) async {
-    final current = state.valueOrNull ?? [];
+    final current = state.value ?? [];
 
     final unchecked = current.where((e) => !e.isChecked).toList();
 
@@ -80,7 +92,7 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
   }
 
   Future<Item?> deleteItemById(int id) async {
-    final current = state.valueOrNull ?? [];
+    final current = state.value ?? [];
 
     Item? deletedItem;
 
@@ -102,7 +114,7 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
   }
 
   Future<List<Item>> deleteCheckedItemsWithUndo() async {
-    final current = state.valueOrNull ?? [];
+    final current = state.value ?? [];
 
     final checkedItems = current.where((e) => e.isChecked).toList();
 
@@ -116,9 +128,13 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
   }
 
   Future<void> deleteItem(int id) async {
-    await DatabaseHelper.instance.deleteItem(id);
+    final current = state.value ?? [];
 
-    await refreshItems();
+    final updated = current.where((e) => e.id != id).toList();
+
+    state = AsyncData(updated);
+
+    await DatabaseHelper.instance.deleteItem(id);
   }
 
   Future<void> updateSortOrders(List<Item> items) async {
@@ -140,23 +156,14 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
   }
 
   Future<void> restoreItemWithOrder(Item item) async {
+    final current = state.value ?? [];
+
     await DatabaseHelper.instance.insertItemWithId(item);
 
-    await refreshItems();
+    final updated = [...current, item]
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
 
-    await normalizeSortOrder();
-  }
-
-  Future<void> normalizeSortOrder() async {
-    final items = state.value ?? [];
-
-    for (int i = 0; i < items.length; i++) {
-      items[i].sortOrder = i;
-    }
-
-    await DatabaseHelper.instance.updateSortOrders(items);
-
-    state = AsyncData([...items]);
+    state = AsyncData(updated);
   }
 }
 

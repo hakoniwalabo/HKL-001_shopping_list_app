@@ -13,8 +13,7 @@ class ShoppingListScreen extends ConsumerStatefulWidget {
 
 class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
   List<String> historyNames = [];
-  final List<Item> _deletedItems = [];
-  List<Item> _deletedCheckedItems = [];
+  List<Item>? _pendingUndoItems;
 
   @override
   void initState() {
@@ -188,7 +187,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                     .read(itemProvider.notifier)
                     .deleteCheckedItemsWithUndo();
 
-                _deletedCheckedItems = List.from(deletedItems);
+                _pendingUndoItems = List.from(deletedItems);
 
                 if (!mounted) return;
 
@@ -199,19 +198,23 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                 final snackBar = SnackBar(
                   duration: const Duration(seconds: 5),
 
-                  content: Text('${_deletedCheckedItems.length}件削除しました'),
+                  content: Text('${_pendingUndoItems?.length ?? 0}件削除しました'),
 
                   action: SnackBarAction(
                     label: '元に戻す',
 
                     onPressed: () async {
-                      for (final item in _deletedCheckedItems) {
+                      final items = _pendingUndoItems;
+
+                      if (items == null) return;
+
+                      for (final item in items) {
                         await ref
                             .read(itemProvider.notifier)
                             .restoreItemWithOrder(item);
                       }
 
-                      _deletedCheckedItems.clear();
+                      _pendingUndoItems = null;
                     },
                   ),
                 );
@@ -220,7 +223,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
                 controller.closed.then((reason) {
                   if (reason != SnackBarClosedReason.action) {
-                    _deletedCheckedItems.clear();
+                    _pendingUndoItems = null;
                   }
                 });
               },
@@ -258,7 +261,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
             .deleteItemById(item.id!);
 
         if (deleted != null) {
-          _deletedItems.add(deleted);
+          _pendingUndoItems = [deleted];
         }
         if (!mounted) return; // ←追加
 
@@ -275,13 +278,17 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
             label: '元に戻す',
 
             onPressed: () async {
-              if (_deletedItems.isEmpty) return;
+              final items = _pendingUndoItems;
 
-              final restoredItem = _deletedItems.removeLast();
+              if (items == null || items.isEmpty) return;
 
-              await ref
-                  .read(itemProvider.notifier)
-                  .restoreItemWithOrder(restoredItem);
+              for (final item in items) {
+                await ref
+                    .read(itemProvider.notifier)
+                    .restoreItemWithOrder(item);
+              }
+
+              _pendingUndoItems = null;
             },
           ),
         );
@@ -290,7 +297,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
         controller.closed.then((reason) {
           if (reason != SnackBarClosedReason.action) {
-            _deletedItems.remove(item);
+            _pendingUndoItems = null;
           }
         });
       },
@@ -351,7 +358,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
             .deleteItemById(item.id!);
 
         if (deleted != null) {
-          _deletedItems.add(deleted);
+          _pendingUndoItems = [deleted];
         }
 
         if (!mounted) return;
@@ -369,13 +376,17 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
             label: '元に戻す',
 
             onPressed: () async {
-              if (_deletedItems.isEmpty) return;
+              final items = _pendingUndoItems;
 
-              final restoredItem = _deletedItems.removeLast();
+              if (items == null || items.isEmpty) return;
 
-              await ref
-                  .read(itemProvider.notifier)
-                  .restoreItemWithOrder(restoredItem);
+              for (final item in items) {
+                await ref
+                    .read(itemProvider.notifier)
+                    .restoreItemWithOrder(item);
+              }
+
+              _pendingUndoItems = null;
             },
           ),
         );
@@ -384,7 +395,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
         controller.closed.then((reason) {
           if (reason != SnackBarClosedReason.action) {
-            _deletedItems.remove(item);
+            _pendingUndoItems = null;
           }
         });
       },
