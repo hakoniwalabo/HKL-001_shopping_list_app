@@ -123,6 +123,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
                 final name = trimmedName.isNotEmpty ? trimmedName : '未入力';
 
+                if (priceController.text.trim().isEmpty) {
+                  priceController.text = '0';
+                }
                 final price = int.tryParse(priceController.text);
 
                 if (price == null || price < 0) {
@@ -131,6 +134,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                   );
 
                   return;
+                }
+                if (taxController.text.trim().isEmpty) {
+                  taxController.text = '0';
                 }
                 final taxPercent = double.tryParse(taxController.text);
 
