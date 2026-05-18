@@ -181,8 +181,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
               onPressed: () async {
                 final navigator = Navigator.of(context);
 
-                final messenger = ScaffoldMessenger.of(context);
-
                 final deletedItems = await ref
                     .read(itemProvider.notifier)
                     .deleteCheckedItemsWithUndo();
@@ -193,39 +191,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
                 navigator.pop();
 
-                messenger.clearSnackBars();
-
-                final snackBar = SnackBar(
-                  duration: const Duration(seconds: 5),
-
-                  content: Text('${_pendingUndoItems?.length ?? 0}件削除しました'),
-
-                  action: SnackBarAction(
-                    label: '元に戻す',
-
-                    onPressed: () async {
-                      final items = _pendingUndoItems;
-
-                      if (items == null) return;
-
-                      for (final item in items) {
-                        await ref
-                            .read(itemProvider.notifier)
-                            .restoreItemWithOrder(item);
-                      }
-
-                      _pendingUndoItems = null;
-                    },
-                  ),
+                _showUndoSnackBar(
+                  message: '${_pendingUndoItems?.length ?? 0}件削除しました',
                 );
-
-                final controller = messenger.showSnackBar(snackBar);
-
-                controller.closed.then((reason) {
-                  if (reason != SnackBarClosedReason.action) {
-                    _pendingUndoItems = null;
-                  }
-                });
               },
 
               child: const Text('削除'),
@@ -236,104 +204,43 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
     );
   }
 
-  Widget _buildUncheckedItem(Item item, int index) {
-    return Dismissible(
-      key: ValueKey('${item.id}_${item.isChecked}'),
-      direction: DismissDirection.endToStart,
+  void _showUndoSnackBar({required String message}) {
+    final messenger = ScaffoldMessenger.of(context);
 
-      background: Container(
-        color: Colors.red,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Icon(Icons.delete, color: Colors.white),
-            SizedBox(width: 8),
-            Text('削除', style: TextStyle(color: Colors.white)),
-          ],
-        ),
-      ),
+    messenger.clearSnackBars();
 
-      onDismissed: (_) async {
-        final deleted = await ref
-            .read(itemProvider.notifier)
-            .deleteItemById(item.id!);
+    final snackBar = SnackBar(
+      duration: const Duration(seconds: 5),
 
-        if (deleted != null) {
-          _pendingUndoItems = [deleted];
-        }
-        if (!mounted) return; // ←追加
+      content: Text(message),
 
-        final messenger = ScaffoldMessenger.of(context);
+      action: SnackBarAction(
+        label: '元に戻す',
 
-        messenger.clearSnackBars();
+        onPressed: () async {
+          final items = _pendingUndoItems;
 
-        final snackBar = SnackBar(
-          duration: const Duration(seconds: 5),
+          if (items == null || items.isEmpty) return;
 
-          content: Text('削除しました'),
-
-          action: SnackBarAction(
-            label: '元に戻す',
-
-            onPressed: () async {
-              final items = _pendingUndoItems;
-
-              if (items == null || items.isEmpty) return;
-
-              for (final item in items) {
-                await ref
-                    .read(itemProvider.notifier)
-                    .restoreItemWithOrder(item);
-              }
-
-              _pendingUndoItems = null;
-            },
-          ),
-        );
-
-        final controller = messenger.showSnackBar(snackBar);
-
-        controller.closed.then((reason) {
-          if (reason != SnackBarClosedReason.action) {
-            _pendingUndoItems = null;
+          for (final item in items) {
+            await ref.read(itemProvider.notifier).restoreItemWithOrder(item);
           }
-        });
-      },
 
-      child: ListTile(
-        leading: Checkbox(
-          value: item.isChecked,
-          onChanged: (value) async {
-            if (value == null) return;
-
-            await ref.read(itemProvider.notifier).toggleCheck(item.id!);
-          },
-        ),
-        onTap: () => _showAddItemDialog(
-          item: item,
-          items: ref.read(itemProvider).value ?? [],
-        ),
-        title: Text(
-          item.name,
-          style: TextStyle(
-            decoration: item.isChecked ? TextDecoration.lineThrough : null,
-            color: item.isChecked ? Colors.grey : null,
-          ),
-        ),
-        subtitle: Text(
-          '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
-        ),
-        trailing: ReorderableDragStartListener(
-          index: index,
-          child: const Icon(Icons.drag_handle),
-        ),
+          _pendingUndoItems = null;
+        },
       ),
     );
+
+    final controller = messenger.showSnackBar(snackBar);
+
+    controller.closed.then((reason) {
+      if (reason != SnackBarClosedReason.action) {
+        _pendingUndoItems = null;
+      }
+    });
   }
 
-  Widget _buildCheckedItem(Item item) {
+  Widget _buildItemTile(Item item, {int? reorderIndex}) {
     return Dismissible(
       key: ValueKey('${item.id}_${item.isChecked}'),
       direction: DismissDirection.endToStart,
@@ -363,41 +270,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
         if (!mounted) return;
 
-        final messenger = ScaffoldMessenger.of(context);
-
-        messenger.clearSnackBars();
-
-        final snackBar = SnackBar(
-          duration: const Duration(seconds: 5),
-
-          content: Text('削除しました'),
-
-          action: SnackBarAction(
-            label: '元に戻す',
-
-            onPressed: () async {
-              final items = _pendingUndoItems;
-
-              if (items == null || items.isEmpty) return;
-
-              for (final item in items) {
-                await ref
-                    .read(itemProvider.notifier)
-                    .restoreItemWithOrder(item);
-              }
-
-              _pendingUndoItems = null;
-            },
-          ),
-        );
-
-        final controller = messenger.showSnackBar(snackBar);
-
-        controller.closed.then((reason) {
-          if (reason != SnackBarClosedReason.action) {
-            _pendingUndoItems = null;
-          }
-        });
+        _showUndoSnackBar(message: '削除しました');
       },
 
       child: ListTile(
@@ -414,6 +287,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
           item: item,
           items: ref.read(itemProvider).value ?? [],
         ),
+
         title: Text(
           item.name,
           style: TextStyle(
@@ -423,8 +297,17 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
         ),
 
         subtitle: Text(
-          '税別: ¥${item.price} / 税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / 税率: ${(item.taxRate * 100).toInt()}%',
+          '税別: ¥${item.price} / '
+          '税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / '
+          '税率: ${(item.taxRate * 100).toInt()}%',
         ),
+
+        trailing: reorderIndex != null
+            ? ReorderableDragStartListener(
+                index: reorderIndex,
+                child: const Icon(Icons.drag_handle),
+              )
+            : null,
       ),
     );
   }
@@ -502,7 +385,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                         },
                         children: [
                           for (int i = 0; i < unchecked.length; i++)
-                            _buildUncheckedItem(unchecked[i], i),
+                            _buildItemTile(unchecked[i], reorderIndex: i),
                         ],
                       ),
 
@@ -529,7 +412,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                           ),
                         ),
 
-                      ...checked.map(_buildCheckedItem),
+                      ...checked.map((item) => _buildItemTile(item)),
                     ],
                   );
           },

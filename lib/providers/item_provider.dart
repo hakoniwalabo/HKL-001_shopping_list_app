@@ -6,15 +6,7 @@ import '../models/item.dart';
 class ItemNotifier extends AsyncNotifier<List<Item>> {
   @override
   Future<List<Item>> build() async {
-    return await DatabaseHelper.instance.getItems();
-  }
-
-  Future<void> refreshItems() async {
-    state = const AsyncLoading();
-
-    state = await AsyncValue.guard(() async {
-      return await DatabaseHelper.instance.getItems();
-    });
+    return DatabaseHelper.instance.getItems();
   }
 
   Future<void> addItem(Item item) async {
@@ -125,34 +117,6 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
     await DatabaseHelper.instance.deleteCheckedItems();
 
     return checkedItems;
-  }
-
-  Future<void> deleteItem(int id) async {
-    final current = state.value ?? [];
-
-    final updated = current.where((e) => e.id != id).toList();
-
-    state = AsyncData(updated);
-
-    await DatabaseHelper.instance.deleteItem(id);
-  }
-
-  Future<void> updateSortOrders(List<Item> items) async {
-    await DatabaseHelper.instance.updateSortOrders(items);
-
-    await refreshItems();
-  }
-
-  Future<void> deleteCheckedItems() async {
-    await DatabaseHelper.instance.deleteCheckedItems();
-
-    await refreshItems();
-  }
-
-  Future<void> restoreItem(Item item) async {
-    await DatabaseHelper.instance.insertItemWithId(item);
-
-    await refreshItems();
   }
 
   Future<void> restoreItemWithOrder(Item item) async {
