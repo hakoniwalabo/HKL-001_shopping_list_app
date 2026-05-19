@@ -4,6 +4,7 @@ import '../database/database_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/item_provider.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -15,7 +16,9 @@ class ShoppingListScreen extends ConsumerStatefulWidget {
 class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
   List<String> historyNames = [];
   List<Item>? _pendingUndoItems;
+  bool showDetailedTotal = false;
   final _formKey = GlobalKey<FormState>();
+  final numberFormat = NumberFormat('#,###');
 
   @override
   void initState() {
@@ -373,8 +376,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
         ),
 
         subtitle: Text(
-          '税別: ¥${item.price} / '
-          '税込: ¥${(item.price * (1 + item.taxRate)).toInt()} / '
+          '税別: ¥${numberFormat.format(item.price)} / '
+          '税込: ¥${numberFormat.format((item.price * (1 + item.taxRate)).toInt())} / '
           '税率: ${(item.taxRate * 100).toInt()}%',
         ),
 
@@ -440,13 +443,87 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                       ),
 
                       Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('税別合計: ¥${uncheckedSubtotal(items).toInt()}'),
-                            Text('税込合計: ¥${uncheckedTotal(items).toInt()}'),
-                          ],
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+
+                          onTap: () {
+                            setState(() {
+                              showDetailedTotal = !showDetailedTotal;
+                            });
+                          },
+
+                          child: AnimatedCrossFade(
+                            duration: const Duration(milliseconds: 200),
+
+                            crossFadeState: showDetailedTotal
+                                ? CrossFadeState.showSecond
+                                : CrossFadeState.showFirst,
+
+                            firstChild: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '未購入 ¥${numberFormat.format(uncheckedTotal(items).toInt())}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+
+                                  Text(
+                                    '購入済 ¥${numberFormat.format(checkedTotal(items).toInt())}',
+                                    style: const TextStyle(color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            secondChild: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+
+                                children: [
+                                  Text(
+                                    '未購入',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+
+                                  Text(
+                                    '税別 ¥${numberFormat.format(uncheckedSubtotal(items).toInt())}',
+                                  ),
+
+                                  Text(
+                                    '税込 ¥${numberFormat.format(uncheckedTotal(items).toInt())}',
+                                  ),
+
+                                  const SizedBox(height: 12),
+
+                                  Text(
+                                    '購入済',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+
+                                  Text(
+                                    '税別 ¥${numberFormat.format(checkedSubtotal(items).toInt())}',
+                                  ),
+
+                                  Text(
+                                    '税込 ¥${numberFormat.format(checkedTotal(items).toInt())}',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
 
@@ -473,18 +550,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                           child: Text(
                             '購入済',
                             style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-
-                      if (checked.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('税別合計: ¥${checkedSubtotal(items).toInt()}'),
-                              Text('税込合計: ¥${checkedTotal(items).toInt()}'),
-                            ],
                           ),
                         ),
 
