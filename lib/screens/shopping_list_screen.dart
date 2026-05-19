@@ -3,6 +3,7 @@ import '../models/item.dart';
 import '../database/database_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/item_provider.dart';
+import 'package:flutter/services.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -97,17 +98,25 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
               ),
               TextField(
                 controller: priceController,
-                decoration: const InputDecoration(labelText: '金額'),
+                decoration: const InputDecoration(
+                  labelText: '金額',
+                  hintText: '0',
+                ),
                 keyboardType: TextInputType.number,
-                maxLength: 8,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
               TextField(
                 controller: taxController,
-                decoration: const InputDecoration(labelText: '税率（%）'),
+                decoration: const InputDecoration(
+                  labelText: '税率（%）',
+                  hintText: '0',
+                ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                maxLength: 5,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
               ),
             ],
           ),
@@ -123,24 +132,19 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
                 final name = trimmedName.isNotEmpty ? trimmedName : '未入力';
 
-                if (priceController.text.trim().isEmpty) {
-                  priceController.text = '0';
-                }
-                final price = int.tryParse(priceController.text);
+                final price = int.tryParse(priceController.text) ?? 0;
 
-                if (price == null || price < 0) {
+                if (price < 0) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('金額は0以上の数字を入力してください')),
                   );
 
                   return;
                 }
-                if (taxController.text.trim().isEmpty) {
-                  taxController.text = '0';
-                }
-                final taxPercent = double.tryParse(taxController.text);
 
-                if (taxPercent == null || taxPercent < 0 || taxPercent > 100) {
+                final taxPercent = double.tryParse(taxController.text) ?? 0;
+
+                if (taxPercent < 0 || taxPercent > 100) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('税率は0〜100で入力してください')),
                   );
