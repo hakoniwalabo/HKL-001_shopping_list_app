@@ -39,17 +39,19 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
   List<Item> checkedItems(List<Item> items) =>
       items.where((e) => e.isChecked).toList();
 
-  double uncheckedSubtotal(List<Item> items) =>
-      uncheckedItems(items).fold(0, (s, e) => s + e.price);
+  int uncheckedSubtotal(List<Item> items) =>
+      uncheckedItems(items).fold(0, (s, e) => s + (e.price * e.quantity));
 
-  double uncheckedTotal(List<Item> items) =>
-      uncheckedItems(items).fold(0, (s, e) => s + e.price * (1 + e.taxRate));
+  double uncheckedTotal(List<Item> items) => uncheckedItems(
+    items,
+  ).fold(0, (s, e) => s + (e.price * e.quantity) * (1 + e.taxRate));
 
-  double checkedSubtotal(List<Item> items) =>
-      checkedItems(items).fold(0, (s, e) => s + e.price);
+  int checkedSubtotal(List<Item> items) =>
+      checkedItems(items).fold(0, (s, e) => s + (e.price * e.quantity));
 
-  double checkedTotal(List<Item> items) =>
-      checkedItems(items).fold(0, (s, e) => s + e.price * (1 + e.taxRate));
+  double checkedTotal(List<Item> items) => checkedItems(
+    items,
+  ).fold(0, (s, e) => s + (e.price * e.quantity) * (1 + e.taxRate));
 
   void _showAddItemDialog({Item? item, required List<Item> items}) {
     final autoController = TextEditingController(
@@ -62,6 +64,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
       text: item != null && item.taxRate != 0
           ? (item.taxRate * 100).toString()
           : '',
+    );
+    final quantityController = TextEditingController(
+      text: item?.quantity.toString() ?? '1',
     );
 
     showDialog(
@@ -157,6 +162,24 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                     return null;
                   },
                 ),
+                TextFormField(
+                  controller: quantityController,
+                  decoration: const InputDecoration(
+                    labelText: '個数',
+                    hintText: '1',
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (value) {
+                    final quantity = int.tryParse(value ?? '');
+
+                    if (quantity == null || quantity <= 0) {
+                      return '1以上を入力してください';
+                    }
+
+                    return null;
+                  },
+                ),
               ],
             ),
           ),
@@ -196,6 +219,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                 }
                 final tax = taxPercent / 100;
 
+                final quantity = int.tryParse(quantityController.text) ?? 1;
+
                 if (item == null) {
                   final newItem = Item(
                     name: name,
@@ -203,6 +228,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                     taxRate: tax,
                     isChecked: false,
                     sortOrder: items.length,
+                    quantity: quantity,
                   );
 
                   await ref.read(itemProvider.notifier).addItem(newItem);
@@ -211,6 +237,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                     name: name,
                     price: price,
                     taxRate: tax,
+                    quantity: quantity,
                   );
 
                   await ref.read(itemProvider.notifier).updateItem(updatedItem);
@@ -376,9 +403,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
         ),
 
         subtitle: Text(
-          '税別: ¥${numberFormat.format(item.price)} / '
-          '税込: ¥${numberFormat.format((item.price * (1 + item.taxRate)).toInt())} / '
-          '税率: ${(item.taxRate * 100).toInt()}%',
+          '単価: ¥${numberFormat.format(item.price)} / '
+          '個数: ${item.quantity} / '
+          '税込合計: ¥${numberFormat.format(((item.price * item.quantity) * (1 + item.taxRate)).toInt())}',
         ),
 
         trailing: reorderIndex != null

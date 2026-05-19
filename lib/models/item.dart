@@ -6,6 +6,7 @@ class Item {
   final int? id;
   final int createdAt;
   final int sortOrder;
+  final int quantity;
 
   Item({
     required this.name,
@@ -15,6 +16,7 @@ class Item {
     this.id,
     int? createdAt,
     this.sortOrder = 0,
+    this.quantity = 1,
   }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
   Map<String, dynamic> toMap() {
@@ -26,6 +28,7 @@ class Item {
       'isChecked': isChecked ? 1 : 0,
       'createdAt': createdAt,
       'sortOrder': sortOrder,
+      'quantity': quantity,
     };
   }
 
@@ -38,6 +41,7 @@ class Item {
       isChecked: map['isChecked'] == 1,
       createdAt: map['createdAt'],
       sortOrder: map['sortOrder'],
+      quantity: map['quantity'] ?? 1,
     );
   }
 
@@ -49,6 +53,7 @@ class Item {
     int? id,
     int? createdAt,
     int? sortOrder,
+    int? quantity,
   }) {
     return Item(
       name: name ?? this.name,
@@ -58,6 +63,7 @@ class Item {
       id: id ?? this.id,
       createdAt: createdAt ?? this.createdAt,
       sortOrder: sortOrder ?? this.sortOrder,
+      quantity: quantity ?? this.quantity,
     );
   }
 }
