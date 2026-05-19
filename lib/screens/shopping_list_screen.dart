@@ -15,6 +15,7 @@ class ShoppingListScreen extends ConsumerStatefulWidget {
 class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
   List<String> historyNames = [];
   List<Item>? _pendingUndoItems;
+  final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
@@ -65,60 +66,96 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
       builder: (context) {
         return AlertDialog(
           title: Text(item == null ? '商品追加' : '商品編集'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Autocomplete<String>(
-                optionsBuilder: (textEditingValue) {
-                  if (textEditingValue.text.isEmpty) {
-                    return historyNames;
-                  }
-                  return historyNames.where(
-                    (option) => option.toLowerCase().contains(
-                      textEditingValue.text.toLowerCase(),
-                    ),
-                  );
-                },
-                onSelected: (selection) {
-                  autoController.text = selection;
-                },
-                fieldViewBuilder:
-                    (context, controller, focusNode, onEditingComplete) {
-                      controller.text = autoController.text;
-                      controller.addListener(() {
-                        autoController.text = controller.text;
-                      });
+          content: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Autocomplete<String>(
+                  optionsBuilder: (textEditingValue) {
+                    if (textEditingValue.text.isEmpty) {
+                      return historyNames;
+                    }
+                    return historyNames.where(
+                      (option) => option.toLowerCase().contains(
+                        textEditingValue.text.toLowerCase(),
+                      ),
+                    );
+                  },
+                  onSelected: (selection) {
+                    autoController.text = selection;
+                  },
+                  fieldViewBuilder:
+                      (context, controller, focusNode, onEditingComplete) {
+                        controller.text = autoController.text;
+                        controller.addListener(() {
+                          autoController.text = controller.text;
+                        });
 
-                      return TextField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        decoration: const InputDecoration(labelText: '商品名'),
-                      );
-                    },
-              ),
-              TextField(
-                controller: priceController,
-                decoration: const InputDecoration(
-                  labelText: '金額',
-                  hintText: '0',
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(labelText: '商品名'),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return '商品名を入力してください';
+                            }
+
+                            return null;
+                          },
+                        );
+                      },
                 ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
-              TextField(
-                controller: taxController,
-                decoration: const InputDecoration(
-                  labelText: '税率（%）',
-                  hintText: '0',
+                TextFormField(
+                  controller: priceController,
+                  decoration: const InputDecoration(
+                    labelText: '金額',
+                    hintText: '0',
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (value) {
+                    final price = int.tryParse(value ?? '');
+
+                    if (price == null) {
+                      return '数値を入力してください';
+                    }
+
+                    if (price < 0) {
+                      return '0以上を入力してください';
+                    }
+
+                    return null;
+                  },
                 ),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+                TextFormField(
+                  controller: taxController,
+                  decoration: const InputDecoration(
+                    labelText: '税率（%）',
+                    hintText: '0',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  ],
+                  validator: (value) {
+                    final tax = double.tryParse(value ?? '');
+
+                    if (tax == null) {
+                      return '数値を入力してください';
+                    }
+
+                    if (tax < 0 || tax > 100) {
+                      return '0〜100で入力してください';
+                    }
+
+                    return null;
+                  },
                 ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -127,6 +164,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
+                if (!_formKey.currentState!.validate()) {
+                  return;
+                }
                 final navigator = Navigator.of(context); // ←先に取得
                 final trimmedName = autoController.text.trim();
 
@@ -209,6 +249,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
             FilledButton(
               onPressed: () async {
+                if (!_formKey.currentState!.validate()) {
+                  return;
+                }
                 final navigator = Navigator.of(context);
 
                 final deletedItems = await ref
@@ -248,6 +291,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
         label: '元に戻す',
 
         onPressed: () async {
+          if (!_formKey.currentState!.validate()) {
+            return;
+          }
           final items = _pendingUndoItems;
 
           if (items == null || items.isEmpty) return;
