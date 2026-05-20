@@ -69,6 +69,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
     final priceFocusNode = FocusNode();
     final taxFocusNode = FocusNode();
     final quantityFocusNode = FocusNode();
+    final memoController = TextEditingController(text: item?.memo ?? '');
 
     void selectAllOnFocus(
       FocusNode focusNode,
@@ -205,6 +206,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                     return null;
                   },
                 ),
+                TextFormField(
+                  controller: memoController,
+                  decoration: const InputDecoration(
+                    labelText: 'メモ',
+                    hintText: '任意',
+                  ),
+                  maxLines: 2,
+                ),
               ],
             ),
           ),
@@ -254,6 +263,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                     isChecked: false,
                     sortOrder: items.length,
                     quantity: quantity,
+                    memo: memoController.text.trim(),
                   );
 
                   await ref.read(itemProvider.notifier).addItem(newItem);
@@ -263,6 +273,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                     price: price,
                     taxRate: tax,
                     quantity: quantity,
+                    memo: memoController.text.trim(),
                   );
 
                   await ref.read(itemProvider.notifier).updateItem(updatedItem);
@@ -428,10 +439,24 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
           ),
         ),
 
-        subtitle: Text(
-          '単価: ¥${numberFormat.format(item.price)} / '
-          '個数: ${item.quantity} / '
-          '税込合計: ¥${numberFormat.format(((item.price * item.quantity) * (1 + item.taxRate)).toInt())}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '単価: ¥${numberFormat.format(item.price)} / '
+              '個数: ${item.quantity} / '
+              '税込合計: ¥${numberFormat.format(((item.price * item.quantity) * (1 + item.taxRate)).toInt())}',
+            ),
+
+            if (item.memo.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  item.memo,
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+          ],
         ),
 
         trailing: reorderIndex != null

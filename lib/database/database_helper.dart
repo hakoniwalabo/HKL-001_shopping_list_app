@@ -35,8 +35,9 @@ CREATE TABLE items(
   taxRate REAL,
   isChecked INTEGER,
   createdAt INTEGER,
-  sortOrder INTEGER
+  sortOrder INTEGER,
   quantity INTEGER,
+  memo TEXT
 )
 ''');
 
