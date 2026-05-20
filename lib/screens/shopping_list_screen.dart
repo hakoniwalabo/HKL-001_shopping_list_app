@@ -58,19 +58,41 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
       text: item?.name == '未入力' ? '' : item?.name ?? '',
     );
     final priceController = TextEditingController(
-      text: item != null && item.price != 0 ? item.price.toString() : '',
+      text: item?.price.toString() ?? '0',
     );
     final taxController = TextEditingController(
-      text: item != null && item.taxRate != 0
-          ? (item.taxRate * 100).toString()
-          : '',
+      text: item != null ? (item.taxRate * 100).toInt().toString() : '0',
     );
     final quantityController = TextEditingController(
       text: item?.quantity.toString() ?? '1',
     );
+    final priceFocusNode = FocusNode();
+    final taxFocusNode = FocusNode();
+    final quantityFocusNode = FocusNode();
+
+    void selectAllOnFocus(
+      FocusNode focusNode,
+      TextEditingController controller,
+    ) {
+      focusNode.addListener(() {
+        if (focusNode.hasFocus) {
+          Future.delayed(Duration.zero, () {
+            controller.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: controller.text.length,
+            );
+          });
+        }
+      });
+    }
+
+    selectAllOnFocus(priceFocusNode, priceController);
+    selectAllOnFocus(taxFocusNode, taxController);
+    selectAllOnFocus(quantityFocusNode, quantityController);
 
     showDialog(
       context: context,
+
       builder: (context) {
         return AlertDialog(
           title: Text(item == null ? '商品追加' : '商品編集'),
@@ -116,6 +138,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                 ),
                 TextFormField(
                   controller: priceController,
+                  focusNode: priceFocusNode,
                   decoration: const InputDecoration(
                     labelText: '金額',
                     hintText: '0',
@@ -138,6 +161,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                 ),
                 TextFormField(
                   controller: taxController,
+                  focusNode: taxFocusNode,
                   decoration: const InputDecoration(
                     labelText: '税率（%）',
                     hintText: '0',
@@ -164,6 +188,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                 ),
                 TextFormField(
                   controller: quantityController,
+                  focusNode: quantityFocusNode,
                   decoration: const InputDecoration(
                     labelText: '個数',
                     hintText: '1',
@@ -255,7 +280,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
           ],
         );
       },
-    );
+    ).whenComplete(() {
+      priceFocusNode.dispose();
+      taxFocusNode.dispose();
+      quantityFocusNode.dispose();
+    });
   }
 
   void _showDeleteCheckedDialog() {
@@ -331,11 +360,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
       ),
     );
 
-    final controller = messenger.showSnackBar(snackBar);
+    messenger.showSnackBar(snackBar);
 
-    controller.closed.then((reason) {
-      if (reason != SnackBarClosedReason.action) {
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!mounted) return;
+
+      if (_pendingUndoItems != null) {
         _pendingUndoItems = null;
+        messenger.clearSnackBars();
       }
     });
   }
@@ -432,7 +464,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.all(12),
         child: itemAsync.when(
           data: (items) {
             final unchecked = uncheckedItems(items);
