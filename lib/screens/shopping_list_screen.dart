@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/item_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../models/shopping_list.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -16,6 +17,9 @@ class ShoppingListScreen extends ConsumerStatefulWidget {
 class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
   List<String> historyNames = [];
   List<Item>? _pendingUndoItems;
+  List<ShoppingList> shoppingLists = [];
+
+  int currentListId = 1;
   bool showDetailedTotal = false;
   final _formKey = GlobalKey<FormState>();
   final numberFormat = NumberFormat('#,###');
@@ -24,6 +28,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
   void initState() {
     super.initState();
     loadHistory();
+    loadLists();
   }
 
   Future<void> loadHistory() async {
@@ -31,6 +36,76 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
     setState(() {
       historyNames = data;
     });
+  }
+
+  Future<void> loadLists() async {
+    final data = await DatabaseHelper.instance.getLists();
+
+    setState(() {
+      shoppingLists = data;
+    });
+  }
+
+  Future<void> changeList(int listId) async {
+    currentListId = listId;
+
+    await ref.read(itemProvider.notifier).changeList(listId);
+
+    setState(() {});
+  }
+
+  Future<void> _showAddListDialog() async {
+    final controller = TextEditingController();
+
+    await showDialog(
+      context: context,
+
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('新規リスト'),
+
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'リスト名'),
+          ),
+
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+
+              child: const Text('キャンセル'),
+            ),
+
+            FilledButton(
+              onPressed: () async {
+                final name = controller.text.trim();
+
+                if (name.isEmpty) {
+                  return;
+                }
+
+                final newList = ShoppingList(name: name);
+
+                final id = await DatabaseHelper.instance.insertList(newList);
+
+                await loadLists();
+
+                if (!mounted) return;
+
+                Navigator.pop(context);
+
+                await changeList(id);
+              },
+
+              child: const Text('追加'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   List<Item> uncheckedItems(List<Item> items) =>
@@ -478,9 +553,50 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('買い物リスト'),
+        title: Text(
+          shoppingLists.isEmpty
+              ? '買い物リスト'
+              : shoppingLists.firstWhere((e) => e.id == currentListId).name,
+        ),
 
         actions: [
+          PopupMenuButton<int>(
+            icon: const Icon(Icons.list),
+
+            onSelected: (listId) async {
+              if (listId == -1) {
+                await _showAddListDialog();
+                return;
+              }
+
+              await changeList(listId);
+            },
+
+            itemBuilder: (context) {
+              return [
+                ...shoppingLists.map((list) {
+                  return PopupMenuItem<int>(
+                    value: list.id,
+                    child: Text(list.name),
+                  );
+                }),
+
+                const PopupMenuDivider(),
+
+                const PopupMenuItem<int>(
+                  value: -1,
+                  child: Row(
+                    children: [
+                      Icon(Icons.add),
+                      SizedBox(width: 8),
+                      Text('新規リスト'),
+                    ],
+                  ),
+                ),
+              ];
+            },
+          ),
+
           IconButton(
             icon: const Icon(Icons.delete_sweep),
 

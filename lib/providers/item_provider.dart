@@ -4,15 +4,19 @@ import '../database/database_helper.dart';
 import '../models/item.dart';
 
 class ItemNotifier extends AsyncNotifier<List<Item>> {
+  int currentListId = 1;
   @override
   Future<List<Item>> build() async {
-    return DatabaseHelper.instance.getItems();
+    return DatabaseHelper.instance.getItems(currentListId);
   }
 
   Future<void> addItem(Item item) async {
     final current = state.value ?? [];
 
-    final newItem = item.copyWith(sortOrder: current.length);
+    final newItem = item.copyWith(
+      sortOrder: current.length,
+      listId: currentListId,
+    );
 
     final id = await DatabaseHelper.instance.insertItem(newItem);
 
@@ -128,6 +132,14 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
 
     state = AsyncData(updated);
+  }
+
+  Future<void> changeList(int listId) async {
+    currentListId = listId;
+
+    final items = await DatabaseHelper.instance.getItems(listId);
+
+    state = AsyncData(items);
   }
 }
 

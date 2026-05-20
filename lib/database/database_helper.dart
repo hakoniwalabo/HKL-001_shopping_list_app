@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/item.dart';
+import '../models/shopping_list.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -37,7 +38,8 @@ CREATE TABLE items(
   createdAt INTEGER,
   sortOrder INTEGER,
   quantity INTEGER,
-  memo TEXT
+  memo TEXT,
+  listId INTEGER
 )
 ''');
 
@@ -49,6 +51,19 @@ CREATE TABLE item_history(
   lastUsed INTEGER
 )
 ''');
+
+    await db.execute('''
+CREATE TABLE lists(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT,
+  createdAt INTEGER
+)
+''');
+
+    await db.insert('lists', {
+      'name': '買い物リスト',
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
+    });
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -85,9 +100,14 @@ CREATE TABLE item_history(
     );
   }
 
-  Future<List<Item>> getItems() async {
+  Future<List<Item>> getItems(int listId) async {
     final db = await instance.database;
-    final result = await db.query('items', orderBy: 'sortOrder ASC');
+    final result = await db.query(
+      'items',
+      where: 'listId = ?',
+      whereArgs: [listId],
+      orderBy: 'sortOrder ASC',
+    );
 
     return result.map((e) => Item.fromMap(e)).toList();
   }
@@ -191,5 +211,19 @@ CREATE TABLE item_history(
     );
 
     return result.map((e) => e['name'] as String).toList();
+  }
+
+  Future<List<ShoppingList>> getLists() async {
+    final db = await database;
+
+    final result = await db.query('lists', orderBy: 'createdAt ASC');
+
+    return result.map((e) => ShoppingList.fromMap(e)).toList();
+  }
+
+  Future<int> insertList(ShoppingList list) async {
+    final db = await database;
+
+    return await db.insert('lists', list.toMap());
   }
 }

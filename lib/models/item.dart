@@ -8,6 +8,7 @@ class Item {
   final int sortOrder;
   final int quantity;
   final String memo;
+  final int listId;
 
   Item({
     required this.name,
@@ -19,6 +20,7 @@ class Item {
     this.sortOrder = 0,
     this.quantity = 1,
     this.memo = '',
+    this.listId = 1,
   }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
   Map<String, dynamic> toMap() {
@@ -32,6 +34,7 @@ class Item {
       'sortOrder': sortOrder,
       'quantity': quantity,
       'memo': memo,
+      'listId': listId,
     };
   }
 
@@ -46,6 +49,7 @@ class Item {
       sortOrder: map['sortOrder'],
       quantity: map['quantity'] ?? 1,
       memo: map['memo'] ?? '',
+      listId: map['listId'] ?? 1,
     );
   }
 
@@ -59,6 +63,7 @@ class Item {
     int? sortOrder,
     int? quantity,
     String? memo,
+    int? listId,
   }) {
     return Item(
       name: name ?? this.name,
@@ -70,6 +75,7 @@ class Item {
       sortOrder: sortOrder ?? this.sortOrder,
       quantity: quantity ?? this.quantity,
       memo: memo ?? this.memo,
+      listId: listId ?? this.listId,
     );
   }
 }
