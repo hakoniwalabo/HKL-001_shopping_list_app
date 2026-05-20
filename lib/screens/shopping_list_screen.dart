@@ -279,9 +279,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
             FilledButton(
               onPressed: () async {
-                if (!_formKey.currentState!.validate()) {
-                  return;
-                }
                 final navigator = Navigator.of(context);
 
                 final deletedItems = await ref
@@ -321,9 +318,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
         label: '元に戻す',
 
         onPressed: () async {
-          if (!_formKey.currentState!.validate()) {
-            return;
-          }
           final items = _pendingUndoItems;
 
           if (items == null || items.isEmpty) return;
