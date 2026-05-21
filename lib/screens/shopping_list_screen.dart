@@ -450,7 +450,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                     labelText: 'メモ',
                     hintText: '任意',
                   ),
-                  maxLines: 2,
+                  maxLines: 3,
                 ),
               ],
             ),
