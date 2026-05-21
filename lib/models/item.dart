@@ -20,7 +20,7 @@ class Item {
     this.sortOrder = 0,
     this.quantity = 1,
     this.memo = '',
-    this.listId = 1,
+    required this.listId,
   }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
   Map<String, dynamic> toMap() {
@@ -49,7 +49,7 @@ class Item {
       sortOrder: map['sortOrder'],
       quantity: map['quantity'] ?? 1,
       memo: map['memo'] ?? '',
-      listId: map['listId'] ?? 1,
+      listId: map['listId'],
     );
   }
 

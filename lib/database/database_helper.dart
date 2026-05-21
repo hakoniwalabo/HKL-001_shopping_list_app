@@ -21,7 +21,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -72,6 +72,10 @@ CREATE TABLE lists(
         'ALTER TABLE items ADD COLUMN quantity INTEGER DEFAULT 1',
       );
     }
+
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE items ADD COLUMN listId INTEGER DEFAULT 1');
+    }
   }
 
   // -------------------------
@@ -100,7 +104,7 @@ CREATE TABLE lists(
     );
   }
 
-  Future<List<Item>> getItems(int listId) async {
+  Future<List<Item>> getItemsByListId(int listId) async {
     final db = await instance.database;
     final result = await db.query(
       'items',
@@ -127,10 +131,14 @@ CREATE TABLE lists(
     return await db.delete('items', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<void> deleteCheckedItems() async {
+  Future<void> deleteCheckedItems(int listId) async {
     final db = await instance.database;
 
-    await db.delete('items', where: 'isChecked = ?', whereArgs: [1]);
+    await db.delete(
+      'items',
+      where: 'isChecked = ? AND listId = ?',
+      whereArgs: [1, listId],
+    );
   }
 
   Future<void> updateSortOrders(List<Item> items) async {
@@ -150,10 +158,15 @@ CREATE TABLE lists(
     await batch.commit(noResult: true);
   }
 
-  Future<void> normalizeAllSortOrders() async {
+  Future<void> normalizeAllSortOrders(int listId) async {
     final db = await database;
 
-    final result = await db.query('items', orderBy: 'sortOrder ASC');
+    final result = await db.query(
+      'items',
+      where: 'listId = ?',
+      whereArgs: [listId],
+      orderBy: 'sortOrder ASC',
+    );
 
     final items = result.map((e) => Item.fromMap(e)).toList();
 
@@ -225,5 +238,15 @@ CREATE TABLE lists(
     final db = await database;
 
     return await db.insert('lists', list.toMap());
+  }
+
+  Future<void> deleteList(int listId) async {
+    final db = await database;
+
+    // 先にitems削除
+    await db.delete('items', where: 'listId = ?', whereArgs: [listId]);
+
+    // lists削除
+    await db.delete('lists', where: 'id = ?', whereArgs: [listId]);
   }
 }

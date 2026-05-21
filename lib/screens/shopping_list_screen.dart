@@ -87,6 +87,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                   return;
                 }
 
+                final navigator = Navigator.of(context);
+
                 final newList = ShoppingList(name: name);
 
                 final id = await DatabaseHelper.instance.insertList(newList);
@@ -95,12 +97,70 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
                 if (!mounted) return;
 
-                Navigator.pop(context);
+                navigator.pop();
 
                 await changeList(id);
               },
 
               child: const Text('追加'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showDeleteListDialog() async {
+    // 最低1個は残す
+    if (shoppingLists.length <= 1) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('最後のリストは削除できません')));
+
+      return;
+    }
+
+    final currentList = shoppingLists.firstWhere((e) => e.id == currentListId);
+
+    await showDialog(
+      context: context,
+
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('リスト削除'),
+
+          content: Text(
+            '「${currentList.name}」を削除しますか？\n'
+            '商品もすべて削除されます。',
+          ),
+
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+
+              child: const Text('キャンセル'),
+            ),
+
+            FilledButton(
+              onPressed: () async {
+                final navigator = Navigator.of(context);
+
+                await DatabaseHelper.instance.deleteList(currentListId);
+
+                await loadLists();
+
+                final nextList = shoppingLists.first;
+
+                if (!mounted) return;
+
+                navigator.pop();
+
+                await changeList(nextList.id!);
+              },
+
+              child: const Text('削除'),
             ),
           ],
         );
@@ -332,6 +392,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
                 if (item == null) {
                   final newItem = Item(
+                    listId: currentListId,
                     name: name,
                     price: price,
                     taxRate: tax,
@@ -569,6 +630,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                 return;
               }
 
+              if (listId == -2) {
+                await _showDeleteListDialog();
+                return;
+              }
+
               await changeList(listId);
             },
 
@@ -585,11 +651,24 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
                 const PopupMenuItem<int>(
                   value: -1,
+
                   child: Row(
                     children: [
                       Icon(Icons.add),
                       SizedBox(width: 8),
                       Text('新規リスト'),
+                    ],
+                  ),
+                ),
+
+                const PopupMenuItem<int>(
+                  value: -2,
+
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete),
+                      SizedBox(width: 8),
+                      Text('リスト削除'),
                     ],
                   ),
                 ),
