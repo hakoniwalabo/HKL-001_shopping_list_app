@@ -249,4 +249,15 @@ CREATE TABLE lists(
     // lists削除
     await db.delete('lists', where: 'id = ?', whereArgs: [listId]);
   }
+
+  Future<void> updateListName(int listId, String newName) async {
+    final db = await database;
+
+    await db.update(
+      'lists',
+      {'name': newName},
+      where: 'id = ?',
+      whereArgs: [listId],
+    );
+  }
 }

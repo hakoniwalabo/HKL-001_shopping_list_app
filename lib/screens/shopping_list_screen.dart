@@ -14,10 +14,13 @@ class ShoppingListScreen extends ConsumerStatefulWidget {
   ConsumerState<ShoppingListScreen> createState() => _ShoppingListScreenState();
 }
 
-class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
+class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
+    with TickerProviderStateMixin {
   List<String> historyNames = [];
   List<Item>? _pendingUndoItems;
   List<ShoppingList> shoppingLists = [];
+
+  TabController? _tabController;
 
   int currentListId = 1;
   bool showDetailedTotal = false;
@@ -27,6 +30,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
   @override
   void initState() {
     super.initState();
+
     loadHistory();
     loadLists();
   }
@@ -40,6 +44,31 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
   Future<void> loadLists() async {
     final data = await DatabaseHelper.instance.getLists();
+
+    if (data.isNotEmpty) {
+      final exists = data.any((e) => e.id == currentListId);
+
+      if (!exists) {
+        currentListId = data.first.id!;
+      }
+    }
+
+    final currentIndex = data.indexWhere((e) => e.id == currentListId);
+
+    _tabController?.removeListener(_handleTabChange);
+    _tabController?.dispose();
+
+    if (data.isNotEmpty) {
+      _tabController = TabController(
+        length: data.length,
+        vsync: this,
+        initialIndex: currentIndex == -1 ? 0 : currentIndex,
+      );
+
+      _tabController?.addListener(_handleTabChange);
+    } else {
+      _tabController = null;
+    }
 
     setState(() {
       shoppingLists = data;
@@ -69,13 +98,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
             autofocus: true,
             decoration: const InputDecoration(labelText: 'リスト名'),
           ),
-
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
               },
-
               child: const Text('キャンセル'),
             ),
 
@@ -100,8 +127,13 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                 navigator.pop();
 
                 await changeList(id);
-              },
 
+                final newIndex = shoppingLists.indexWhere((e) => e.id == id);
+
+                if (newIndex != -1) {
+                  _tabController?.animateTo(newIndex);
+                }
+              },
               child: const Text('追加'),
             ),
           ],
@@ -151,6 +183,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
                 await loadLists();
 
+                _tabController?.animateTo(0);
+
                 final nextList = shoppingLists.first;
 
                 if (!mounted) return;
@@ -166,6 +200,75 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
         );
       },
     );
+  }
+
+  Future<void> _showRenameListDialog() async {
+    final currentList = shoppingLists.firstWhere((e) => e.id == currentListId);
+
+    final controller = TextEditingController(text: currentList.name);
+
+    await showDialog(
+      context: context,
+
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('リスト名変更'),
+
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'リスト名'),
+          ),
+
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+
+              child: const Text('キャンセル'),
+            ),
+
+            FilledButton(
+              onPressed: () async {
+                final navigator = Navigator.of(context);
+
+                final newName = controller.text.trim();
+
+                if (newName.isEmpty) {
+                  return;
+                }
+
+                await DatabaseHelper.instance.updateListName(
+                  currentListId,
+                  newName,
+                );
+
+                await loadLists();
+
+                if (!mounted) return;
+
+                navigator.pop();
+
+                setState(() {});
+              },
+
+              child: const Text('変更'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _handleTabChange() async {
+    if (_tabController == null) return;
+
+    if (_tabController!.indexIsChanging) return;
+
+    final selectedList = shoppingLists[_tabController!.index];
+
+    await changeList(selectedList.id!);
   }
 
   List<Item> uncheckedItems(List<Item> items) =>
@@ -606,6 +709,12 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
   }
 
   @override
+  void dispose() {
+    _tabController?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final itemAsync = ref.watch(itemProvider);
 
@@ -614,74 +723,48 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          shoppingLists.isEmpty
-              ? '買い物リスト'
-              : shoppingLists.firstWhere((e) => e.id == currentListId).name,
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                shoppingLists.isEmpty
+                    ? '買い物リスト'
+                    : shoppingLists
+                          .firstWhere((e) => e.id == currentListId)
+                          .name,
+              ),
+            ),
+
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: _showRenameListDialog,
+            ),
+
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: _showDeleteListDialog,
+            ),
+
+            IconButton(
+              onPressed: _showAddListDialog,
+              icon: const Icon(Icons.add),
+            ),
+
+            IconButton(
+              icon: const Icon(Icons.delete_sweep),
+              onPressed: checked.isEmpty ? null : _showDeleteCheckedDialog,
+            ),
+          ],
         ),
 
-        actions: [
-          PopupMenuButton<int>(
-            icon: const Icon(Icons.list),
+        bottom: shoppingLists.isEmpty || _tabController == null
+            ? null
+            : TabBar(
+                controller: _tabController,
+                isScrollable: true,
 
-            onSelected: (listId) async {
-              if (listId == -1) {
-                await _showAddListDialog();
-                return;
-              }
-
-              if (listId == -2) {
-                await _showDeleteListDialog();
-                return;
-              }
-
-              await changeList(listId);
-            },
-
-            itemBuilder: (context) {
-              return [
-                ...shoppingLists.map((list) {
-                  return PopupMenuItem<int>(
-                    value: list.id,
-                    child: Text(list.name),
-                  );
-                }),
-
-                const PopupMenuDivider(),
-
-                const PopupMenuItem<int>(
-                  value: -1,
-
-                  child: Row(
-                    children: [
-                      Icon(Icons.add),
-                      SizedBox(width: 8),
-                      Text('新規リスト'),
-                    ],
-                  ),
-                ),
-
-                const PopupMenuItem<int>(
-                  value: -2,
-
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete),
-                      SizedBox(width: 8),
-                      Text('リスト削除'),
-                    ],
-                  ),
-                ),
-              ];
-            },
-          ),
-
-          IconButton(
-            icon: const Icon(Icons.delete_sweep),
-
-            onPressed: checked.isEmpty ? null : _showDeleteCheckedDialog,
-          ),
-        ],
+                tabs: [for (final list in shoppingLists) Tab(text: list.name)],
+              ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(12),
