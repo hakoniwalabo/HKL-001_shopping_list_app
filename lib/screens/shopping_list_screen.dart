@@ -735,6 +735,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
               ),
             ),
 
+                        IconButton(
+              onPressed: _showAddListDialog,
+              icon: const Icon(Icons.add),
+),
+
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: _showRenameListDialog,
@@ -743,11 +748,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
             IconButton(
               icon: const Icon(Icons.delete),
               onPressed: _showDeleteListDialog,
-            ),
-
-            IconButton(
-              onPressed: _showAddListDialog,
-              icon: const Icon(Icons.add),
             ),
 
             IconButton(
