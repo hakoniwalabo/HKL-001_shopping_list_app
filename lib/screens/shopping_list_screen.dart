@@ -6,6 +6,7 @@ import '../providers/item_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/shopping_list.dart';
+import 'dart:async';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -735,10 +736,10 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
               ),
             ),
 
-                        IconButton(
+            IconButton(
               onPressed: _showAddListDialog,
               icon: const Icon(Icons.add),
-),
+            ),
 
             IconButton(
               icon: const Icon(Icons.edit),
@@ -887,8 +888,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                         buildDefaultDragHandles: false,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        onReorder: (oldIndex, newIndex) async {
-                          await ref
+                        onReorder: (oldIndex, newIndex) {
+                          ref
                               .read(itemProvider.notifier)
                               .reorderUncheckedItems(oldIndex, newIndex);
                         },
