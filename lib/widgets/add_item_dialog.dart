@@ -63,7 +63,7 @@ Future<void> showAddItemDialog({
                                 textEditingValue.text.toLowerCase(),
                               ),
                             )
-                            .take(10);
+                            .take(100);
                       },
 
                       onSelected: (selection) {

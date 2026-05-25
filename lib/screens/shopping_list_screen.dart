@@ -8,6 +8,7 @@ import '../models/shopping_list.dart';
 import 'dart:async';
 import '../widgets/add_item_dialog.dart';
 import '../widgets/list_section.dart';
+import '../widgets/empty_state_view.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -476,20 +477,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
             final checked = items.where((e) => e.isChecked).toList();
 
             return items.isEmpty
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.shopping_cart_outlined,
-                          size: 64,
-                          color: Colors.grey,
-                        ),
-                        SizedBox(height: 16),
-                        Text('＋ボタンから追加してください'),
-                      ],
-                    ),
-                  )
+                ? const EmptyStateView()
                 : ListView(
                     children: [
                       ListSection(
