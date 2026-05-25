@@ -9,6 +9,7 @@ import 'dart:async';
 import '../widgets/add_item_dialog.dart';
 import '../widgets/list_section.dart';
 import '../widgets/empty_state_view.dart';
+import '../widgets/list_management_buttons.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -438,24 +439,16 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
               ),
             ),
 
-            IconButton(
-              onPressed: _showAddListDialog,
-              icon: const Icon(Icons.add),
-            ),
+            ListManagementButtons(
+              onAddList: _showAddListDialog,
 
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: _showRenameListDialog,
-            ),
+              onRenameList: _showRenameListDialog,
 
-            IconButton(
-              icon: const Icon(Icons.delete),
-              onPressed: _showDeleteListDialog,
-            ),
+              onDeleteList: _showDeleteListDialog,
 
-            IconButton(
-              icon: const Icon(Icons.delete_sweep),
-              onPressed: checked.isEmpty ? null : _showDeleteCheckedDialog,
+              onDeleteChecked: checked.isEmpty
+                  ? null
+                  : _showDeleteCheckedDialog,
             ),
           ],
         ),
