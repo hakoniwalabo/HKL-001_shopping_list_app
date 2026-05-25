@@ -153,7 +153,17 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       return;
     }
 
-    final currentList = shoppingLists.firstWhere((e) => e.id == currentListId);
+    ShoppingList? currentList;
+
+    try {
+      currentList = shoppingLists.firstWhere((e) => e.id == currentListId);
+    } catch (_) {
+      currentList = null;
+    }
+
+    if (currentList == null) {
+      return;
+    }
 
     await showDialog(
       context: context,
@@ -163,7 +173,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           title: const Text('リスト削除'),
 
           content: Text(
-            '「${currentList.name}」を削除しますか？\n'
+            '「${currentList!.name}」を削除しますか？\n'
             '商品もすべて削除されます。',
           ),
 
@@ -185,6 +195,10 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                 await loadLists();
 
                 _tabController?.animateTo(0);
+
+                if (shoppingLists.isEmpty) {
+                  return;
+                }
 
                 final nextList = shoppingLists.first;
 
@@ -265,7 +279,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   Future<void> _handleTabChange() async {
     if (_tabController == null) return;
 
-    if (_tabController!.indexIsChanging) return;
+    if (_tabController!.index >= shoppingLists.length) {
+      return;
+    }
 
     final selectedList = shoppingLists[_tabController!.index];
 
@@ -730,9 +746,15 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
               child: Text(
                 shoppingLists.isEmpty
                     ? '買い物リスト'
-                    : shoppingLists
-                          .firstWhere((e) => e.id == currentListId)
-                          .name,
+                    : (() {
+                        try {
+                          return shoppingLists
+                              .firstWhere((e) => e.id == currentListId)
+                              .name;
+                        } catch (_) {
+                          return '買い物リスト';
+                        }
+                      })(),
               ),
             ),
 
