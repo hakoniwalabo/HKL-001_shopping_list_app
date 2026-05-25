@@ -6,9 +6,8 @@ import '../providers/item_provider.dart';
 import 'package:intl/intl.dart';
 import '../models/shopping_list.dart';
 import 'dart:async';
-import '../widgets/item_tile.dart';
-import '../widgets/total_summary.dart';
 import '../widgets/add_item_dialog.dart';
+import '../widgets/list_section.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -493,122 +492,94 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                   )
                 : ListView(
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Text(
-                          '未購入',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
+                      ListSection(
+                        title: '未購入',
 
-                      TotalSummary(
-                        items: items,
-                        showDetailedTotal: showDetailedTotal,
+                        items: unchecked,
 
-                        onToggle: () {
-                          setState(() {
-                            showDetailedTotal = !showDetailedTotal;
-                          });
-                        },
-                      ),
+                        reorderable: true,
 
-                      ReorderableListView(
-                        buildDefaultDragHandles: false,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        onReorder: (oldIndex, newIndex) {
-                          ref
-                              .read(itemProvider.notifier)
-                              .reorderUncheckedItems(oldIndex, newIndex);
-                        },
-                        children: [
-                          for (int i = 0; i < unchecked.length; i++)
-                            ItemTile(
-                              item: unchecked[i],
-                              reorderIndex: i,
-                              numberFormat: numberFormat,
+                        numberFormat: numberFormat,
 
-                              onTap: () => showAddItemDialog(
-                                context: context,
-                                ref: ref,
-                                currentListId: currentListId,
-                                historyNames: historyNames,
-                                item: unchecked[i],
-                                items: ref.read(itemProvider).value ?? [],
-                              ),
-
-                              onToggleCheck: (value) async {
-                                if (value == null) return;
-
-                                await ref
-                                    .read(itemProvider.notifier)
-                                    .toggleCheck(unchecked[i].id!);
-                              },
-
-                              onDismissed: () async {
-                                final deleted = await ref
-                                    .read(itemProvider.notifier)
-                                    .deleteItemById(unchecked[i].id!);
-
-                                if (deleted != null) {
-                                  _pendingUndoItems = [deleted];
-                                }
-
-                                if (!mounted) return;
-
-                                _showUndoSnackBar(message: '削除しました');
-                              },
-                            ),
-                        ],
-                      ),
-
-                      const Divider(thickness: 1.5),
-
-                      if (checked.isNotEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: Text(
-                            '購入済',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-
-                      ...checked.map(
-                        (item) => ItemTile(
-                          item: item,
-                          numberFormat: numberFormat,
-
-                          onTap: () => showAddItemDialog(
+                        onTap: (item) => () {
+                          showAddItemDialog(
                             context: context,
                             ref: ref,
                             currentListId: currentListId,
                             historyNames: historyNames,
                             item: item,
                             items: ref.read(itemProvider).value ?? [],
-                          ),
+                          );
+                        },
 
-                          onToggleCheck: (value) async {
-                            if (value == null) return;
+                        onToggleCheck: (item) async {
+                          await ref
+                              .read(itemProvider.notifier)
+                              .toggleCheck(item.id!);
+                        },
 
-                            await ref
-                                .read(itemProvider.notifier)
-                                .toggleCheck(item.id!);
-                          },
+                        onDelete: (item) async {
+                          final deleted = await ref
+                              .read(itemProvider.notifier)
+                              .deleteItemById(item.id!);
 
-                          onDismissed: () async {
-                            final deleted = await ref
-                                .read(itemProvider.notifier)
-                                .deleteItemById(item.id!);
+                          if (deleted != null) {
+                            _pendingUndoItems = [deleted];
+                          }
 
-                            if (deleted != null) {
-                              _pendingUndoItems = [deleted];
-                            }
+                          if (!mounted) return;
 
-                            if (!mounted) return;
+                          _showUndoSnackBar(message: '削除しました');
+                        },
 
-                            _showUndoSnackBar(message: '削除しました');
-                          },
-                        ),
+                        onReorder: (oldIndex, newIndex) async {
+                          await ref
+                              .read(itemProvider.notifier)
+                              .reorderUncheckedItems(oldIndex, newIndex);
+                        },
+                      ),
+
+                      const Divider(thickness: 1.5),
+
+                      ListSection(
+                        title: '購入済',
+
+                        items: checked,
+
+                        reorderable: false,
+
+                        numberFormat: numberFormat,
+
+                        onTap: (item) => () {
+                          showAddItemDialog(
+                            context: context,
+                            ref: ref,
+                            currentListId: currentListId,
+                            historyNames: historyNames,
+                            item: item,
+                            items: ref.read(itemProvider).value ?? [],
+                          );
+                        },
+
+                        onToggleCheck: (item) async {
+                          await ref
+                              .read(itemProvider.notifier)
+                              .toggleCheck(item.id!);
+                        },
+
+                        onDelete: (item) async {
+                          final deleted = await ref
+                              .read(itemProvider.notifier)
+                              .deleteItemById(item.id!);
+
+                          if (deleted != null) {
+                            _pendingUndoItems = [deleted];
+                          }
+
+                          if (!mounted) return;
+
+                          _showUndoSnackBar(message: '削除しました');
+                        },
                       ),
                     ],
                   );
