@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/shopping_list.dart';
 import 'dart:async';
+import '../widgets/item_tile.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -689,92 +690,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     });
   }
 
-  Widget _buildItemTile(Item item, {int? reorderIndex}) {
-    return Dismissible(
-      key: ValueKey('${item.id}_${item.isChecked}'),
-      direction: DismissDirection.endToStart,
-
-      background: Container(
-        color: Colors.red,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Icon(Icons.delete, color: Colors.white),
-            SizedBox(width: 8),
-            Text('削除', style: TextStyle(color: Colors.white)),
-          ],
-        ),
-      ),
-
-      onDismissed: (_) async {
-        final deleted = await ref
-            .read(itemProvider.notifier)
-            .deleteItemById(item.id!);
-
-        if (deleted != null) {
-          _pendingUndoItems = [deleted];
-        }
-
-        if (!mounted) return;
-
-        _showUndoSnackBar(message: '削除しました');
-      },
-
-      child: ListTile(
-        leading: Checkbox(
-          value: item.isChecked,
-          onChanged: (value) async {
-            if (value == null) return;
-
-            await ref.read(itemProvider.notifier).toggleCheck(item.id!);
-          },
-        ),
-
-        onTap: () => _showAddItemDialog(
-          item: item,
-          items: ref.read(itemProvider).value ?? [],
-        ),
-
-        title: Text(
-          item.name,
-          style: TextStyle(
-            decoration: item.isChecked ? TextDecoration.lineThrough : null,
-            color: item.isChecked ? Colors.grey : null,
-          ),
-        ),
-
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '単価: ¥${numberFormat.format(item.price)} / '
-              '個数: ${item.quantity} / '
-              '税込合計: ¥${numberFormat.format(((item.price * item.quantity) * (1 + item.taxRate)).toInt())}',
-            ),
-
-            if (item.memo.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  item.memo,
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ),
-          ],
-        ),
-
-        trailing: reorderIndex != null
-            ? ReorderableDragStartListener(
-                index: reorderIndex,
-                child: const Icon(Icons.drag_handle),
-              )
-            : null,
-      ),
-    );
-  }
-
   @override
   void dispose() {
     _tabController?.dispose();
@@ -967,7 +882,38 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                         },
                         children: [
                           for (int i = 0; i < unchecked.length; i++)
-                            _buildItemTile(unchecked[i], reorderIndex: i),
+                            ItemTile(
+                              item: unchecked[i],
+                              reorderIndex: i,
+                              numberFormat: numberFormat,
+
+                              onTap: () => _showAddItemDialog(
+                                item: unchecked[i],
+                                items: ref.read(itemProvider).value ?? [],
+                              ),
+
+                              onToggleCheck: (value) async {
+                                if (value == null) return;
+
+                                await ref
+                                    .read(itemProvider.notifier)
+                                    .toggleCheck(unchecked[i].id!);
+                              },
+
+                              onDismissed: () async {
+                                final deleted = await ref
+                                    .read(itemProvider.notifier)
+                                    .deleteItemById(unchecked[i].id!);
+
+                                if (deleted != null) {
+                                  _pendingUndoItems = [deleted];
+                                }
+
+                                if (!mounted) return;
+
+                                _showUndoSnackBar(message: '削除しました');
+                              },
+                            ),
                         ],
                       ),
 
@@ -982,7 +928,39 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                           ),
                         ),
 
-                      ...checked.map((item) => _buildItemTile(item)),
+                      ...checked.map(
+                        (item) => ItemTile(
+                          item: item,
+                          numberFormat: numberFormat,
+
+                          onTap: () => _showAddItemDialog(
+                            item: item,
+                            items: ref.read(itemProvider).value ?? [],
+                          ),
+
+                          onToggleCheck: (value) async {
+                            if (value == null) return;
+
+                            await ref
+                                .read(itemProvider.notifier)
+                                .toggleCheck(item.id!);
+                          },
+
+                          onDismissed: () async {
+                            final deleted = await ref
+                                .read(itemProvider.notifier)
+                                .deleteItemById(item.id!);
+
+                            if (deleted != null) {
+                              _pendingUndoItems = [deleted];
+                            }
+
+                            if (!mounted) return;
+
+                            _showUndoSnackBar(message: '削除しました');
+                          },
+                        ),
+                      ),
                     ],
                   );
           },
