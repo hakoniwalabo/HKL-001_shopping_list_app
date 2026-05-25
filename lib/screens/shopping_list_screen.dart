@@ -3,12 +3,12 @@ import '../models/item.dart';
 import '../database/database_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/item_provider.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/shopping_list.dart';
 import 'dart:async';
 import '../widgets/item_tile.dart';
 import '../widgets/total_summary.dart';
+import '../widgets/add_item_dialog.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -28,7 +28,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   int currentListId = 1;
   bool showDetailedTotal = false;
   bool _isChangingTab = false;
-  final _formKey = GlobalKey<FormState>();
   final numberFormat = NumberFormat('#,###');
 
   @override
@@ -320,271 +319,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     }
   }
 
-  void _showAddItemDialog({Item? item, required List<Item> items}) {
-    final autoController = TextEditingController(
-      text: item?.name == '未入力' ? '' : item?.name ?? '',
-    );
-    final priceController = TextEditingController(
-      text: item?.price.toString() ?? '0',
-    );
-    final taxController = TextEditingController(
-      text: item != null ? (item.taxRate * 100).toInt().toString() : '0',
-    );
-    final quantityController = TextEditingController(
-      text: item?.quantity.toString() ?? '1',
-    );
-    final priceFocusNode = FocusNode();
-    final taxFocusNode = FocusNode();
-    final quantityFocusNode = FocusNode();
-    final memoController = TextEditingController(text: item?.memo ?? '');
-
-    void selectAllOnFocus(
-      FocusNode focusNode,
-      TextEditingController controller,
-    ) {
-      focusNode.addListener(() {
-        if (focusNode.hasFocus) {
-          Future.delayed(Duration.zero, () {
-            controller.selection = TextSelection(
-              baseOffset: 0,
-              extentOffset: controller.text.length,
-            );
-          });
-        }
-      });
-    }
-
-    selectAllOnFocus(priceFocusNode, priceController);
-    selectAllOnFocus(taxFocusNode, taxController);
-    selectAllOnFocus(quantityFocusNode, quantityController);
-
-    showDialog(
-      context: context,
-
-      builder: (context) {
-        return AlertDialog(
-          title: Text(item == null ? '商品追加' : '商品編集'),
-
-          actionsOverflowDirection: VerticalDirection.down,
-
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: double.maxFinite,
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Autocomplete<String>(
-                      optionsBuilder: (textEditingValue) {
-                        if (textEditingValue.text.isEmpty) {
-                          return historyNames;
-                        }
-                        return historyNames.where(
-                          (option) => option.toLowerCase().contains(
-                            textEditingValue.text.toLowerCase(),
-                          ),
-                        );
-                      },
-                      onSelected: (selection) {
-                        autoController.text = selection;
-                      },
-                      fieldViewBuilder:
-                          (context, controller, focusNode, onEditingComplete) {
-                            controller.text = autoController.text;
-                            controller.addListener(() {
-                              autoController.text = controller.text;
-                            });
-
-                            return TextFormField(
-                              controller: controller,
-                              focusNode: focusNode,
-                              decoration: const InputDecoration(
-                                labelText: '商品名',
-                              ),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return '商品名を入力してください';
-                                }
-
-                                return null;
-                              },
-                            );
-                          },
-                    ),
-                    TextFormField(
-                      controller: priceController,
-                      focusNode: priceFocusNode,
-                      decoration: const InputDecoration(
-                        labelText: '金額',
-                        hintText: '0',
-                      ),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      validator: (value) {
-                        final price = int.tryParse(value ?? '');
-
-                        if (price == null) {
-                          return '数値を入力してください';
-                        }
-
-                        if (price < 0) {
-                          return '0以上を入力してください';
-                        }
-
-                        return null;
-                      },
-                    ),
-                    TextFormField(
-                      controller: taxController,
-                      focusNode: taxFocusNode,
-                      decoration: const InputDecoration(
-                        labelText: '税率（%）',
-                        hintText: '0',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d*\.?\d*'),
-                        ),
-                      ],
-                      validator: (value) {
-                        final tax = double.tryParse(value ?? '');
-
-                        if (tax == null) {
-                          return '数値を入力してください';
-                        }
-
-                        if (tax < 0 || tax > 100) {
-                          return '0〜100で入力してください';
-                        }
-
-                        return null;
-                      },
-                    ),
-                    TextFormField(
-                      controller: quantityController,
-                      focusNode: quantityFocusNode,
-                      decoration: const InputDecoration(
-                        labelText: '個数',
-                        hintText: '1',
-                      ),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      validator: (value) {
-                        final quantity = int.tryParse(value ?? '');
-
-                        if (quantity == null || quantity <= 0) {
-                          return '1以上を入力してください';
-                        }
-
-                        return null;
-                      },
-                    ),
-                    TextFormField(
-                      controller: memoController,
-                      decoration: const InputDecoration(
-                        labelText: 'メモ',
-                        hintText: '任意',
-                      ),
-                      maxLines: 3,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('キャンセル'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (!_formKey.currentState!.validate()) {
-                  return;
-                }
-                final navigator = Navigator.of(context); // ←先に取得
-                final trimmedName = autoController.text.trim();
-
-                final name = trimmedName.isNotEmpty ? trimmedName : '未入力';
-
-                final price = int.tryParse(priceController.text) ?? 0;
-
-                if (price < 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('金額は0以上の数字を入力してください')),
-                  );
-
-                  return;
-                }
-
-                final taxPercent = double.tryParse(taxController.text) ?? 0;
-
-                if (taxPercent < 0 || taxPercent > 100) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('税率は0〜100で入力してください')),
-                  );
-
-                  return;
-                }
-                final tax = taxPercent / 100;
-
-                final quantity = int.tryParse(quantityController.text) ?? 1;
-
-                if (item == null) {
-                  final newItem = Item(
-                    listId: currentListId,
-                    name: name,
-                    price: price,
-                    taxRate: tax,
-                    isChecked: false,
-                    sortOrder: items.length,
-                    quantity: quantity,
-                    memo: memoController.text.trim(),
-                  );
-
-                  await ref.read(itemProvider.notifier).addItem(newItem);
-                } else {
-                  final updatedItem = item.copyWith(
-                    name: name,
-                    price: price,
-                    taxRate: tax,
-                    quantity: quantity,
-                    memo: memoController.text.trim(),
-                  );
-
-                  await ref.read(itemProvider.notifier).updateItem(updatedItem);
-                }
-
-                await DatabaseHelper.instance.upsertHistory(name);
-
-                await loadHistory();
-
-                if (!mounted) return;
-                navigator.pop(); // ←安全
-              },
-              child: Text(item == null ? '追加' : '更新'),
-            ),
-          ],
-        );
-      },
-    ).whenComplete(() {
-      autoController.dispose();
-      priceController.dispose();
-      taxController.dispose();
-      quantityController.dispose();
-      memoController.dispose();
-
-      priceFocusNode.dispose();
-      taxFocusNode.dispose();
-      quantityFocusNode.dispose();
-    });
-  }
-
   void _showDeleteCheckedDialog() {
     showDialog(
       context: context,
@@ -794,7 +528,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                               reorderIndex: i,
                               numberFormat: numberFormat,
 
-                              onTap: () => _showAddItemDialog(
+                              onTap: () => showAddItemDialog(
+                                context: context,
+                                ref: ref,
+                                currentListId: currentListId,
+                                historyNames: historyNames,
                                 item: unchecked[i],
                                 items: ref.read(itemProvider).value ?? [],
                               ),
@@ -840,7 +578,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                           item: item,
                           numberFormat: numberFormat,
 
-                          onTap: () => _showAddItemDialog(
+                          onTap: () => showAddItemDialog(
+                            context: context,
+                            ref: ref,
+                            currentListId: currentListId,
+                            historyNames: historyNames,
                             item: item,
                             items: ref.read(itemProvider).value ?? [],
                           ),
@@ -878,8 +620,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () =>
-            _showAddItemDialog(items: ref.read(itemProvider).value ?? []),
+        onPressed: () => showAddItemDialog(
+          context: context,
+          ref: ref,
+          currentListId: currentListId,
+          historyNames: historyNames,
+          items: ref.read(itemProvider).value ?? [],
+        ),
+
         icon: const Icon(Icons.add),
         label: const Text('追加'),
       ),
