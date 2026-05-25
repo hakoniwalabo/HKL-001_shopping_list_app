@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../models/shopping_list.dart';
 import 'dart:async';
 import '../widgets/item_tile.dart';
+import '../widgets/total_summary.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -318,26 +319,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       _isChangingTab = false;
     }
   }
-
-  List<Item> uncheckedItems(List<Item> items) =>
-      items.where((e) => !e.isChecked).toList();
-
-  List<Item> checkedItems(List<Item> items) =>
-      items.where((e) => e.isChecked).toList();
-
-  int uncheckedSubtotal(List<Item> items) =>
-      uncheckedItems(items).fold(0, (s, e) => s + (e.price * e.quantity));
-
-  double uncheckedTotal(List<Item> items) => uncheckedItems(
-    items,
-  ).fold(0, (s, e) => s + (e.price * e.quantity) * (1 + e.taxRate));
-
-  int checkedSubtotal(List<Item> items) =>
-      checkedItems(items).fold(0, (s, e) => s + (e.price * e.quantity));
-
-  double checkedTotal(List<Item> items) => checkedItems(
-    items,
-  ).fold(0, (s, e) => s + (e.price * e.quantity) * (1 + e.taxRate));
 
   void _showAddItemDialog({Item? item, required List<Item> items}) {
     final autoController = TextEditingController(
@@ -701,7 +682,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     final itemAsync = ref.watch(itemProvider);
 
     final items = itemAsync.value ?? [];
-    final checked = checkedItems(items);
+    final checked = items.where((e) => e.isChecked).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -758,8 +739,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         padding: const EdgeInsets.all(12),
         child: itemAsync.when(
           data: (items) {
-            final unchecked = uncheckedItems(items);
-            final checked = checkedItems(items);
+            final unchecked = items.where((e) => !e.isChecked).toList();
+            final checked = items.where((e) => e.isChecked).toList();
 
             return items.isEmpty
                 ? const Center(
@@ -786,89 +767,15 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                         ),
                       ),
 
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
+                      TotalSummary(
+                        items: items,
+                        showDetailedTotal: showDetailedTotal,
 
-                          onTap: () {
-                            setState(() {
-                              showDetailedTotal = !showDetailedTotal;
-                            });
-                          },
-
-                          child: AnimatedCrossFade(
-                            duration: const Duration(milliseconds: 200),
-
-                            crossFadeState: showDetailedTotal
-                                ? CrossFadeState.showSecond
-                                : CrossFadeState.showFirst,
-
-                            firstChild: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    '未購入 ¥${numberFormat.format(uncheckedTotal(items).toInt())}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-
-                                  Text(
-                                    '購入済 ¥${numberFormat.format(checkedTotal(items).toInt())}',
-                                    style: const TextStyle(color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            secondChild: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-
-                                children: [
-                                  Text(
-                                    '未購入',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-
-                                  Text(
-                                    '税別 ¥${numberFormat.format(uncheckedSubtotal(items).toInt())}',
-                                  ),
-
-                                  Text(
-                                    '税込 ¥${numberFormat.format(uncheckedTotal(items).toInt())}',
-                                  ),
-
-                                  const SizedBox(height: 12),
-
-                                  Text(
-                                    '購入済',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-
-                                  Text(
-                                    '税別 ¥${numberFormat.format(checkedSubtotal(items).toInt())}',
-                                  ),
-
-                                  Text(
-                                    '税込 ¥${numberFormat.format(checkedTotal(items).toInt())}',
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+                        onToggle: () {
+                          setState(() {
+                            showDetailedTotal = !showDetailedTotal;
+                          });
+                        },
                       ),
 
                       ReorderableListView(
