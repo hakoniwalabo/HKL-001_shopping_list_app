@@ -7,6 +7,8 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
   int currentListId = 1;
   @override
   Future<List<Item>> build() async {
+    await DatabaseHelper.instance.normalizeAllSortOrders(currentListId);
+
     return DatabaseHelper.instance.getItemsByListId(currentListId);
   }
 
@@ -116,6 +118,14 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
 
     await DatabaseHelper.instance.deleteItem(id);
 
+    await DatabaseHelper.instance.normalizeAllSortOrders(currentListId);
+
+    final refreshed = await DatabaseHelper.instance.getItemsByListId(
+      currentListId,
+    );
+
+    state = AsyncData(refreshed);
+
     return deletedItem;
   }
 
@@ -130,20 +140,29 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
 
     await DatabaseHelper.instance.deleteCheckedItems(currentListId);
 
+    await DatabaseHelper.instance.normalizeAllSortOrders(currentListId);
+
+    final refreshed = await DatabaseHelper.instance.getItemsByListId(
+      currentListId,
+    );
+
+    state = AsyncData(refreshed);
+
     return checkedItems;
   }
 
   Future<void> restoreItemWithOrder(Item item) async {
-    final current = state.value ?? [];
-
     await DatabaseHelper.instance.insertItemWithId(
       item.copyWith(listId: currentListId),
     );
 
-    final updated = [...current, item]
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    await DatabaseHelper.instance.normalizeAllSortOrders(currentListId);
 
-    state = AsyncData(updated);
+    final refreshed = await DatabaseHelper.instance.getItemsByListId(
+      currentListId,
+    );
+
+    state = AsyncData(refreshed);
   }
 }
 
