@@ -10,6 +10,7 @@ import '../widgets/add_item_dialog.dart';
 import '../widgets/list_section.dart';
 import '../widgets/empty_state_view.dart';
 import '../widgets/list_management_buttons.dart';
+import '../widgets/list_tab_bar.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -453,14 +454,10 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           ],
         ),
 
-        bottom: shoppingLists.isEmpty || _tabController == null
-            ? null
-            : TabBar(
-                controller: _tabController,
-                isScrollable: true,
-
-                tabs: [for (final list in shoppingLists) Tab(text: list.name)],
-              ),
+        bottom: ListTabBar(
+          shoppingLists: shoppingLists,
+          tabController: _tabController,
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(12),
