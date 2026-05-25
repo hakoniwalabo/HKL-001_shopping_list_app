@@ -148,7 +148,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           ],
         );
       },
-    );
+    ).whenComplete(() {
+      controller.dispose();
+    });
   }
 
   Future<void> _showDeleteListDialog() async {
@@ -281,7 +283,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           ],
         );
       },
-    );
+    ).whenComplete(() {
+      controller.dispose();
+    });
   }
 
   Future<void> _handleTabChange() async {
@@ -566,6 +570,12 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         );
       },
     ).whenComplete(() {
+      autoController.dispose();
+      priceController.dispose();
+      taxController.dispose();
+      quantityController.dispose();
+      memoController.dispose();
+
       priceFocusNode.dispose();
       taxFocusNode.dispose();
       quantityFocusNode.dispose();
