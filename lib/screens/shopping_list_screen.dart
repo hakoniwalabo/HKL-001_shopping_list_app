@@ -102,10 +102,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         return AlertDialog(
           title: const Text('新規リスト'),
 
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'リスト名'),
+          actionsOverflowDirection: VerticalDirection.down,
+
+          content: SingleChildScrollView(
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'リスト名'),
+            ),
           ),
           actions: [
             TextButton(
@@ -239,10 +243,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         return AlertDialog(
           title: const Text('リスト名変更'),
 
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'リスト名'),
+          actionsOverflowDirection: VerticalDirection.down,
+
+          content: SingleChildScrollView(
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'リスト名'),
+            ),
           ),
 
           actions: [
@@ -374,126 +382,139 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       builder: (context) {
         return AlertDialog(
           title: Text(item == null ? '商品追加' : '商品編集'),
-          content: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Autocomplete<String>(
-                  optionsBuilder: (textEditingValue) {
-                    if (textEditingValue.text.isEmpty) {
-                      return historyNames;
-                    }
-                    return historyNames.where(
-                      (option) => option.toLowerCase().contains(
-                        textEditingValue.text.toLowerCase(),
-                      ),
-                    );
-                  },
-                  onSelected: (selection) {
-                    autoController.text = selection;
-                  },
-                  fieldViewBuilder:
-                      (context, controller, focusNode, onEditingComplete) {
-                        controller.text = autoController.text;
-                        controller.addListener(() {
-                          autoController.text = controller.text;
-                        });
 
-                        return TextFormField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          decoration: const InputDecoration(labelText: '商品名'),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return '商品名を入力してください';
-                            }
+          actionsOverflowDirection: VerticalDirection.down,
 
-                            return null;
-                          },
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: double.maxFinite,
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Autocomplete<String>(
+                      optionsBuilder: (textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
+                          return historyNames;
+                        }
+                        return historyNames.where(
+                          (option) => option.toLowerCase().contains(
+                            textEditingValue.text.toLowerCase(),
+                          ),
                         );
                       },
-                ),
-                TextFormField(
-                  controller: priceController,
-                  focusNode: priceFocusNode,
-                  decoration: const InputDecoration(
-                    labelText: '金額',
-                    hintText: '0',
-                  ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (value) {
-                    final price = int.tryParse(value ?? '');
+                      onSelected: (selection) {
+                        autoController.text = selection;
+                      },
+                      fieldViewBuilder:
+                          (context, controller, focusNode, onEditingComplete) {
+                            controller.text = autoController.text;
+                            controller.addListener(() {
+                              autoController.text = controller.text;
+                            });
 
-                    if (price == null) {
-                      return '数値を入力してください';
-                    }
+                            return TextFormField(
+                              controller: controller,
+                              focusNode: focusNode,
+                              decoration: const InputDecoration(
+                                labelText: '商品名',
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return '商品名を入力してください';
+                                }
 
-                    if (price < 0) {
-                      return '0以上を入力してください';
-                    }
+                                return null;
+                              },
+                            );
+                          },
+                    ),
+                    TextFormField(
+                      controller: priceController,
+                      focusNode: priceFocusNode,
+                      decoration: const InputDecoration(
+                        labelText: '金額',
+                        hintText: '0',
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        final price = int.tryParse(value ?? '');
 
-                    return null;
-                  },
-                ),
-                TextFormField(
-                  controller: taxController,
-                  focusNode: taxFocusNode,
-                  decoration: const InputDecoration(
-                    labelText: '税率（%）',
-                    hintText: '0',
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                        if (price == null) {
+                          return '数値を入力してください';
+                        }
+
+                        if (price < 0) {
+                          return '0以上を入力してください';
+                        }
+
+                        return null;
+                      },
+                    ),
+                    TextFormField(
+                      controller: taxController,
+                      focusNode: taxFocusNode,
+                      decoration: const InputDecoration(
+                        labelText: '税率（%）',
+                        hintText: '0',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d*\.?\d*'),
+                        ),
+                      ],
+                      validator: (value) {
+                        final tax = double.tryParse(value ?? '');
+
+                        if (tax == null) {
+                          return '数値を入力してください';
+                        }
+
+                        if (tax < 0 || tax > 100) {
+                          return '0〜100で入力してください';
+                        }
+
+                        return null;
+                      },
+                    ),
+                    TextFormField(
+                      controller: quantityController,
+                      focusNode: quantityFocusNode,
+                      decoration: const InputDecoration(
+                        labelText: '個数',
+                        hintText: '1',
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        final quantity = int.tryParse(value ?? '');
+
+                        if (quantity == null || quantity <= 0) {
+                          return '1以上を入力してください';
+                        }
+
+                        return null;
+                      },
+                    ),
+                    TextFormField(
+                      controller: memoController,
+                      decoration: const InputDecoration(
+                        labelText: 'メモ',
+                        hintText: '任意',
+                      ),
+                      maxLines: 3,
+                    ),
                   ],
-                  validator: (value) {
-                    final tax = double.tryParse(value ?? '');
-
-                    if (tax == null) {
-                      return '数値を入力してください';
-                    }
-
-                    if (tax < 0 || tax > 100) {
-                      return '0〜100で入力してください';
-                    }
-
-                    return null;
-                  },
                 ),
-                TextFormField(
-                  controller: quantityController,
-                  focusNode: quantityFocusNode,
-                  decoration: const InputDecoration(
-                    labelText: '個数',
-                    hintText: '1',
-                  ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (value) {
-                    final quantity = int.tryParse(value ?? '');
-
-                    if (quantity == null || quantity <= 0) {
-                      return '1以上を入力してください';
-                    }
-
-                    return null;
-                  },
-                ),
-                TextFormField(
-                  controller: memoController,
-                  decoration: const InputDecoration(
-                    labelText: 'メモ',
-                    hintText: '任意',
-                  ),
-                  maxLines: 3,
-                ),
-              ],
+              ),
             ),
           ),
+
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
