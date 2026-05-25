@@ -25,6 +25,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
   int currentListId = 1;
   bool showDetailedTotal = false;
+  bool _isChangingTab = false;
   final _formKey = GlobalKey<FormState>();
   final numberFormat = NumberFormat('#,###');
 
@@ -74,6 +75,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       _tabController = null;
     }
 
+    if (!mounted) return;
+
     setState(() {
       shoppingLists = data;
     });
@@ -83,6 +86,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     currentListId = listId;
 
     await ref.read(itemProvider.notifier).changeList(listId);
+
+    if (!mounted) return;
 
     setState(() {});
   }
@@ -197,6 +202,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
                 await loadLists();
 
+                if (!mounted) return;
+
                 _tabController?.animateTo(0);
 
                 if (shoppingLists.isEmpty) {
@@ -204,8 +211,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                 }
 
                 final nextList = shoppingLists.first;
-
-                if (!mounted) return;
 
                 navigator.pop();
 
@@ -282,13 +287,23 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   Future<void> _handleTabChange() async {
     if (_tabController == null) return;
 
+    if (_isChangingTab) return;
+
+    if (_tabController!.indexIsChanging) return;
+
     if (_tabController!.index >= shoppingLists.length) {
       return;
     }
 
-    final selectedList = shoppingLists[_tabController!.index];
+    _isChangingTab = true;
 
-    await changeList(selectedList.id!);
+    try {
+      final selectedList = shoppingLists[_tabController!.index];
+
+      await changeList(selectedList.id!);
+    } finally {
+      _isChangingTab = false;
+    }
   }
 
   List<Item> uncheckedItems(List<Item> items) =>
@@ -635,10 +650,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     Future.delayed(const Duration(seconds: 5), () {
       if (!mounted) return;
 
-      if (_pendingUndoItems != null) {
-        _pendingUndoItems = null;
-        messenger.clearSnackBars();
-      }
+      final messenger = ScaffoldMessenger.maybeOf(context);
+
+      if (messenger == null) return;
+
+      messenger.clearSnackBars();
     });
   }
 
