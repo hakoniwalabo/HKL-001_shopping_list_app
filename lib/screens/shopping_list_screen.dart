@@ -38,6 +38,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
   Future<void> loadHistory() async {
     final data = await DatabaseHelper.instance.getHistoryNames();
+
+    if (!mounted) return;
+
     setState(() {
       historyNames = data;
     });

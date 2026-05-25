@@ -144,44 +144,48 @@ CREATE TABLE lists(
   Future<void> updateSortOrders(List<Item> items) async {
     final db = await database;
 
-    final batch = db.batch();
+    await db.transaction((txn) async {
+      final batch = txn.batch();
 
-    for (final item in items) {
-      batch.update(
-        'items',
-        {'sortOrder': item.sortOrder},
-        where: 'id = ?',
-        whereArgs: [item.id],
-      );
-    }
+      for (final item in items) {
+        batch.update(
+          'items',
+          {'sortOrder': item.sortOrder},
+          where: 'id = ?',
+          whereArgs: [item.id],
+        );
+      }
 
-    await batch.commit(noResult: true);
+      await batch.commit(noResult: true);
+    });
   }
 
   Future<void> normalizeAllSortOrders(int listId) async {
     final db = await database;
 
-    final result = await db.query(
-      'items',
-      where: 'listId = ?',
-      whereArgs: [listId],
-      orderBy: 'sortOrder ASC',
-    );
-
-    final items = result.map((e) => Item.fromMap(e)).toList();
-
-    final batch = db.batch();
-
-    for (int i = 0; i < items.length; i++) {
-      batch.update(
+    await db.transaction((txn) async {
+      final result = await txn.query(
         'items',
-        {'sortOrder': i},
-        where: 'id = ?',
-        whereArgs: [items[i].id],
+        where: 'listId = ?',
+        whereArgs: [listId],
+        orderBy: 'sortOrder ASC',
       );
-    }
 
-    await batch.commit(noResult: true);
+      final items = result.map((e) => Item.fromMap(e)).toList();
+
+      final batch = txn.batch();
+
+      for (int i = 0; i < items.length; i++) {
+        batch.update(
+          'items',
+          {'sortOrder': i},
+          where: 'id = ?',
+          whereArgs: [items[i].id],
+        );
+      }
+
+      await batch.commit(noResult: true);
+    });
   }
 
   // -------------------------
@@ -243,11 +247,11 @@ CREATE TABLE lists(
   Future<void> deleteList(int listId) async {
     final db = await database;
 
-    // 先にitems削除
-    await db.delete('items', where: 'listId = ?', whereArgs: [listId]);
+    await db.transaction((txn) async {
+      await txn.delete('items', where: 'listId = ?', whereArgs: [listId]);
 
-    // lists削除
-    await db.delete('lists', where: 'id = ?', whereArgs: [listId]);
+      await txn.delete('lists', where: 'id = ?', whereArgs: [listId]);
+    });
   }
 
   Future<void> updateListName(int listId, String newName) async {
