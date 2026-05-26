@@ -14,9 +14,21 @@ Future<void> showAddItemDialog({
   Item? item,
 }) async {
   final isEdit = item != null;
-  final formKey = GlobalKey<AddItemFormState>();
+  final formKey = GlobalKey<FormState>();
 
-  await showDialog(
+  final nameController = TextEditingController(text: item?.name ?? '');
+  final priceController = TextEditingController(
+    text: item?.price.toString() ?? '0',
+  );
+  final taxController = TextEditingController(
+    text: item != null ? (item.taxRate * 100).toInt().toString() : '0',
+  );
+  final quantityController = TextEditingController(
+    text: item?.quantity.toString() ?? '1',
+  );
+  final memoController = TextEditingController(text: item?.memo ?? '');
+
+  await showDialog<void>(
     context: context,
 
     builder: (dialogContext) {
@@ -25,17 +37,13 @@ Future<void> showAddItemDialog({
 
         content: SingleChildScrollView(
           child: AddItemForm(
-            key: formKey,
-            currentListId: currentListId,
+            formKey: formKey,
+            nameController: nameController,
+            priceController: priceController,
+            taxController: taxController,
+            quantityController: quantityController,
+            memoController: memoController,
             historyNames: historyNames,
-            item: item,
-            onAddItem: (newItem) =>
-                ref.read(itemProvider.notifier).addItem(newItem),
-            onUpdateItem: (updatedItem) =>
-                ref.read(itemProvider.notifier).updateItem(updatedItem),
-            onUpsertHistory: (name) =>
-                DatabaseHelper.instance.upsertHistory(name),
-            onSuccess: () => Navigator.of(dialogContext).pop(),
           ),
         ),
 
@@ -47,12 +55,58 @@ Future<void> showAddItemDialog({
 
           FilledButton(
             onPressed: () async {
-              await formKey.currentState?.submit();
+              if (formKey.currentState?.validate() != true) return;
+
+              final name = nameController.text.trim();
+              final price = int.tryParse(priceController.text) ?? 0;
+              final taxRate =
+                  (double.tryParse(taxController.text) ?? 0) / 100;
+              final quantity =
+                  int.tryParse(quantityController.text) ?? 1;
+              final memo = memoController.text.trim();
+
+              if (isEdit) {
+                final updatedItem = item.copyWith(
+                  name: name,
+                  price: price,
+                  taxRate: taxRate,
+                  quantity: quantity,
+                  memo: memo,
+                );
+
+                await ref
+                    .read(itemProvider.notifier)
+                    .updateItem(updatedItem);
+              } else {
+                final newItem = Item(
+                  name: name,
+                  price: price,
+                  taxRate: taxRate,
+                  quantity: quantity,
+                  memo: memo,
+                  listId: currentListId,
+                  sortOrder: DateTime.now().millisecondsSinceEpoch,
+                );
+
+                await ref.read(itemProvider.notifier).addItem(newItem);
+                await DatabaseHelper.instance.upsertHistory(name);
+              }
+
+              if (!dialogContext.mounted) return;
+
+              Navigator.of(dialogContext).pop();
             },
+
             child: Text(isEdit ? '保存' : '追加'),
           ),
         ],
       );
     },
   );
+
+  nameController.dispose();
+  priceController.dispose();
+  taxController.dispose();
+  quantityController.dispose();
+  memoController.dispose();
 }

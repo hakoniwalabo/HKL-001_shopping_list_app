@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 
 class ItemNameField extends StatelessWidget {
   final TextEditingController controller;
-  final FocusNode focusNode;
   final List<String> historyNames;
 
   const ItemNameField({
     super.key,
     required this.controller,
-    required this.focusNode,
     required this.historyNames,
   });
 
@@ -33,7 +31,7 @@ class ItemNameField extends StatelessWidget {
         controller.text = selection;
       },
 
-      fieldViewBuilder: (context, autocompleteController, _, _) {
+      fieldViewBuilder: (context, autocompleteController, focusNode, _) {
         // 編集モード時、Autocomplete内部controllerに初期値を反映する
         if (autocompleteController.text.isEmpty && controller.text.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
