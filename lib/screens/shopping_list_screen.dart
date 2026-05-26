@@ -98,68 +98,25 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   }
 
   Future<void> _showAddListDialog() async {
-    final controller = TextEditingController();
-
-    await showDialog(
+    await showDialog<void>(
       context: context,
-
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('新規リスト'),
-
-          actionsOverflowDirection: VerticalDirection.down,
-
-          content: SingleChildScrollView(
-            child: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'リスト名'),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('キャンセル'),
-            ),
-
-            FilledButton(
-              onPressed: () async {
-                final name = controller.text.trim();
-
-                if (name.isEmpty) {
-                  return;
-                }
-
-                final navigator = Navigator.of(context);
-
-                final newList = ShoppingList(name: name);
-
-                final id = await DatabaseHelper.instance.insertList(newList);
-
-                await loadLists();
-
-                if (!mounted) return;
-
-                navigator.pop();
-
-                await changeList(id);
-
-                final newIndex = shoppingLists.indexWhere((e) => e.id == id);
-
-                if (newIndex != -1) {
-                  _tabController?.animateTo(newIndex);
-                }
-              },
-              child: const Text('追加'),
-            ),
-          ],
-        );
-      },
-    ).whenComplete(() {
-      controller.dispose();
-    });
+      builder: (dialogContext) => _SingleFieldDialog(
+        title: '新規リスト',
+        labelText: 'リスト名',
+        submitLabel: '追加',
+        onSubmit: (name) async {
+          final newList = ShoppingList(name: name);
+          final id = await DatabaseHelper.instance.insertList(newList);
+          await loadLists();
+          if (!mounted) return;
+          await changeList(id);
+          final newIndex = shoppingLists.indexWhere((e) => e.id == id);
+          if (newIndex != -1) {
+            _tabController?.animateTo(newIndex);
+          }
+        },
+      ),
+    );
   }
 
   Future<void> _showDeleteListDialog() async {
@@ -239,66 +196,21 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   Future<void> _showRenameListDialog() async {
     final currentList = shoppingLists.firstWhere((e) => e.id == currentListId);
 
-    final controller = TextEditingController(text: currentList.name);
-
-    await showDialog(
+    await showDialog<void>(
       context: context,
-
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('リスト名変更'),
-
-          actionsOverflowDirection: VerticalDirection.down,
-
-          content: SingleChildScrollView(
-            child: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'リスト名'),
-            ),
-          ),
-
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-
-              child: const Text('キャンセル'),
-            ),
-
-            FilledButton(
-              onPressed: () async {
-                final navigator = Navigator.of(context);
-
-                final newName = controller.text.trim();
-
-                if (newName.isEmpty) {
-                  return;
-                }
-
-                await DatabaseHelper.instance.updateListName(
-                  currentListId,
-                  newName,
-                );
-
-                await loadLists();
-
-                if (!mounted) return;
-
-                navigator.pop();
-
-                setState(() {});
-              },
-
-              child: const Text('変更'),
-            ),
-          ],
-        );
-      },
-    ).whenComplete(() {
-      controller.dispose();
-    });
+      builder: (dialogContext) => _SingleFieldDialog(
+        title: 'リスト名変更',
+        labelText: 'リスト名',
+        initialText: currentList.name,
+        submitLabel: '変更',
+        onSubmit: (newName) async {
+          await DatabaseHelper.instance.updateListName(currentListId, newName);
+          await loadLists();
+          if (!mounted) return;
+          setState(() {});
+        },
+      ),
+    );
   }
 
   Future<void> _handleTabChange() async {
@@ -578,6 +490,71 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         icon: const Icon(Icons.add),
         label: const Text('追加'),
       ),
+    );
+  }
+}
+
+class _SingleFieldDialog extends StatefulWidget {
+  final String title;
+  final String labelText;
+  final String? initialText;
+  final String submitLabel;
+  final Future<void> Function(String value) onSubmit;
+
+  const _SingleFieldDialog({
+    required this.title,
+    required this.labelText,
+    this.initialText,
+    required this.submitLabel,
+    required this.onSubmit,
+  });
+
+  @override
+  State<_SingleFieldDialog> createState() => _SingleFieldDialogState();
+}
+
+class _SingleFieldDialogState extends State<_SingleFieldDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      actionsOverflowDirection: VerticalDirection.down,
+      content: SingleChildScrollView(
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          decoration: InputDecoration(labelText: widget.labelText),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            final value = _controller.text.trim();
+            if (value.isEmpty) return;
+            Navigator.pop(context);
+            await widget.onSubmit(value);
+          },
+          child: Text(widget.submitLabel),
+        ),
+      ],
     );
   }
 }
