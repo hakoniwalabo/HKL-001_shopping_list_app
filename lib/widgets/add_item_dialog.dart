@@ -34,6 +34,20 @@ Future<void> showAddItemDialog({
 
   final formKey = GlobalKey<FormState>();
 
+  final nameFocusNode = FocusNode();
+
+  nameFocusNode.addListener(() {
+    if (!nameFocusNode.hasFocus) return;
+
+    final text = nameController.text;
+    if (text.isEmpty) return;
+
+    nameController.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: text.length,
+    );
+  });
+
   await showDialog(
     context: context,
 
@@ -72,26 +86,24 @@ Future<void> showAddItemDialog({
 
                       fieldViewBuilder:
                           (context, controller, focusNode, onEditingComplete) {
-                            controller.text = nameController.text;
-
-                            controller.addListener(() {
-                              nameController.text = controller.text;
-                            });
+                            // 初期値同期（1回だけ）
+                            if (controller.text.isEmpty &&
+                                nameController.text.isNotEmpty &&
+                                ModalRoute.of(context)?.isCurrent == true) {
+                              controller.text = nameController.text;
+                            }
 
                             return TextFormField(
                               controller: controller,
-                              focusNode: focusNode,
+                              focusNode: nameFocusNode,
                               autofocus: true,
-
                               decoration: const InputDecoration(
                                 labelText: '商品名',
                               ),
-
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
                                   return '商品名を入力してください';
                                 }
-
                                 return null;
                               },
                             );
@@ -164,7 +176,9 @@ Future<void> showAddItemDialog({
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.pop(dialogContext);
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context, rootNavigator: true).pop();
+                  }
                 },
 
                 child: const Text('キャンセル'),
@@ -185,7 +199,7 @@ Future<void> showAddItemDialog({
                   final memo = memoController.text.trim();
 
                   if (isEdit) {
-                    final updatedItem = item!.copyWith(
+                    final updatedItem = item.copyWith(
                       name: name,
                       price: price,
                       taxRate: (double.tryParse(taxController.text) ?? 0) / 100,
@@ -204,7 +218,7 @@ Future<void> showAddItemDialog({
                       quantity: quantity,
                       memo: memo,
                       listId: currentListId,
-                      sortOrder: items.length,
+                      sortOrder: DateTime.now().millisecondsSinceEpoch,
                     );
 
                     await ref.read(itemProvider.notifier).addItem(newItem);
@@ -214,7 +228,9 @@ Future<void> showAddItemDialog({
 
                   if (!context.mounted) return;
 
-                  Navigator.pop(dialogContext);
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context, rootNavigator: true).pop();
+                  }
                 },
 
                 child: Text(isEdit ? '保存' : '追加'),
@@ -231,4 +247,5 @@ Future<void> showAddItemDialog({
   quantityController.dispose();
   memoController.dispose();
   taxController.dispose();
+  nameFocusNode.dispose();
 }
