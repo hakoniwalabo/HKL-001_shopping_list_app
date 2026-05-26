@@ -72,8 +72,16 @@ Future<void> showAddItemDialog({
 
           FilledButton(
             onPressed: () async {
+              print('[DEBUG] 追加ボタン onPressed 開始');
               final formState = formKey.currentState;
-              if (formState == null || !formState.validate()) return;
+              print('[DEBUG] formKey.currentState = $formState');
+              if (formState == null) {
+                print('[DEBUG] formState が null → return');
+                return;
+              }
+              final valid = formState.validate();
+              print('[DEBUG] validate() = $valid');
+              if (!valid) return;
 
               final name = nameCtrl.text.trim();
               final price = int.tryParse(priceCtrl.text) ?? 0;
@@ -81,31 +89,39 @@ Future<void> showAddItemDialog({
               final quantity = int.tryParse(quantityCtrl.text) ?? 1;
               final memo = memoCtrl.text.trim();
 
-              if (isEdit) {
-                final updatedItem = item.copyWith(
-                  name: name,
-                  price: price,
-                  taxRate: taxRate,
-                  quantity: quantity,
-                  memo: memo,
-                );
-                await ref
-                    .read(itemProvider.notifier)
-                    .updateItem(updatedItem);
-              } else {
-                final newItem = Item(
-                  name: name,
-                  price: price,
-                  taxRate: taxRate,
-                  quantity: quantity,
-                  memo: memo,
-                  listId: currentListId,
-                  sortOrder: DateTime.now().millisecondsSinceEpoch,
-                );
-                await ref.read(itemProvider.notifier).addItem(newItem);
-                await DatabaseHelper.instance.upsertHistory(name);
+              try {
+                if (isEdit) {
+                  final updatedItem = item.copyWith(
+                    name: name,
+                    price: price,
+                    taxRate: taxRate,
+                    quantity: quantity,
+                    memo: memo,
+                  );
+                  await ref
+                      .read(itemProvider.notifier)
+                      .updateItem(updatedItem);
+                } else {
+                  final newItem = Item(
+                    name: name,
+                    price: price,
+                    taxRate: taxRate,
+                    quantity: quantity,
+                    memo: memo,
+                    listId: currentListId,
+                    sortOrder: DateTime.now().millisecondsSinceEpoch,
+                  );
+                  print('[DEBUG] addItem 呼び出し前');
+                  await ref.read(itemProvider.notifier).addItem(newItem);
+                  print('[DEBUG] addItem 完了');
+                  await DatabaseHelper.instance.upsertHistory(name);
+                }
+              } catch (e, st) {
+                print('[DEBUG] 例外発生: $e\n$st');
+                return;
               }
 
+              print('[DEBUG] Navigator.pop 直前');
               if (!dialogContext.mounted) return;
               Navigator.of(dialogContext).pop();
             },
