@@ -73,22 +73,19 @@ class _ItemNameFieldState extends State<ItemNameField> {
           },
         ),
         if (_suggestions.isNotEmpty)
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 140),
-            child: Material(
-              elevation: 2,
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: _suggestions.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    dense: true,
-                    title: Text(_suggestions[index]),
-                    onTap: () => _selectSuggestion(_suggestions[index]),
-                  );
-                },
-              ),
+          Material(
+            elevation: 2,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: _suggestions
+                  .map(
+                    (s) => ListTile(
+                      dense: true,
+                      title: Text(s),
+                      onTap: () => _selectSuggestion(s),
+                    ),
+                  )
+                  .toList(),
             ),
           ),
       ],
