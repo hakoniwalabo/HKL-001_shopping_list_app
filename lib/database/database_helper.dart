@@ -21,7 +21,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -67,14 +67,44 @@ CREATE TABLE lists(
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await db.execute(
-        'ALTER TABLE items ADD COLUMN quantity INTEGER DEFAULT 1',
-      );
+    // 不足しているテーブルを作成（IF NOT EXISTS で冪等）
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS item_history(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE,
+  count INTEGER,
+  lastUsed INTEGER
+)
+''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS lists(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT,
+  createdAt INTEGER
+)
+''');
+
+    // lists が空なら初期リストを挿入
+    final existingLists = await db.query('lists');
+    if (existingLists.isEmpty) {
+      await db.insert('lists', {
+        'name': '買い物リスト',
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+      });
     }
 
-    if (oldVersion < 3) {
-      await db.execute('ALTER TABLE items ADD COLUMN listId INTEGER DEFAULT 1');
+    // 不足しているカラムを追加（既存なら例外を握り潰す）
+    for (final sql in [
+      'ALTER TABLE items ADD COLUMN quantity INTEGER DEFAULT 1',
+      'ALTER TABLE items ADD COLUMN memo TEXT',
+      'ALTER TABLE items ADD COLUMN listId INTEGER DEFAULT 1',
+    ]) {
+      try {
+        await db.execute(sql);
+      } catch (_) {
+        // カラムが既に存在する場合は無視
+      }
     }
   }
 
