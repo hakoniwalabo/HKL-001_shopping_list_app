@@ -17,125 +17,141 @@ Future<void> showAddItemDialog({
   required List<String> historyNames,
   Item? item,
 }) async {
-  final isEdit = item != null;
-  final formKey = GlobalKey<FormState>();
-
-  final nameCtrl = TextEditingController(text: item?.name ?? '');
-  final priceCtrl = TextEditingController(
-    text: item?.price.toString() ?? '0',
-  );
-  final taxCtrl = TextEditingController(
-    text: item != null ? (item.taxRate * 100).toInt().toString() : '0',
-  );
-  final quantityCtrl = TextEditingController(
-    text: item?.quantity.toString() ?? '1',
-  );
-  final memoCtrl = TextEditingController(text: item?.memo ?? '');
-
   await showDialog<void>(
     context: context,
+    builder: (dialogContext) => _AddItemDialogContent(
+      ref: ref,
+      currentListId: currentListId,
+      historyNames: historyNames,
+      item: item,
+    ),
+  );
+}
 
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: Text(isEdit ? '商品編集' : '商品追加'),
+class _AddItemDialogContent extends StatefulWidget {
+  final WidgetRef ref;
+  final int currentListId;
+  final List<String> historyNames;
+  final Item? item;
 
-        content: SingleChildScrollView(
-          child: Form(
-            key: formKey,
+  const _AddItemDialogContent({
+    required this.ref,
+    required this.currentListId,
+    required this.historyNames,
+    this.item,
+  });
 
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+  @override
+  State<_AddItemDialogContent> createState() => _AddItemDialogContentState();
+}
 
-              children: [
-                ItemNameField(
-                  controller: nameCtrl,
-                  historyNames: historyNames,
-                ),
-                const SizedBox(height: 12),
-                PriceField(controller: priceCtrl),
-                const SizedBox(height: 12),
-                TaxField(controller: taxCtrl),
-                const SizedBox(height: 12),
-                QuantityField(controller: quantityCtrl),
-                const SizedBox(height: 12),
-                MemoField(controller: memoCtrl),
-              ],
-            ),
+class _AddItemDialogContentState extends State<_AddItemDialogContent> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _priceCtrl;
+  late final TextEditingController _taxCtrl;
+  late final TextEditingController _quantityCtrl;
+  late final TextEditingController _memoCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final item = widget.item;
+    _nameCtrl = TextEditingController(text: item?.name ?? '');
+    _priceCtrl = TextEditingController(text: item?.price.toString() ?? '0');
+    _taxCtrl = TextEditingController(
+      text: item != null ? (item.taxRate * 100).toInt().toString() : '0',
+    );
+    _quantityCtrl = TextEditingController(
+      text: item?.quantity.toString() ?? '1',
+    );
+    _memoCtrl = TextEditingController(text: item?.memo ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _priceCtrl.dispose();
+    _taxCtrl.dispose();
+    _quantityCtrl.dispose();
+    _memoCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final name = _nameCtrl.text.trim();
+    final price = int.tryParse(_priceCtrl.text) ?? 0;
+    final taxRate = (double.tryParse(_taxCtrl.text) ?? 0) / 100;
+    final quantity = int.tryParse(_quantityCtrl.text) ?? 1;
+    final memo = _memoCtrl.text.trim();
+
+    final item = widget.item;
+    if (item != null) {
+      final updatedItem = item.copyWith(
+        name: name,
+        price: price,
+        taxRate: taxRate,
+        quantity: quantity,
+        memo: memo,
+      );
+      await widget.ref.read(itemProvider.notifier).updateItem(updatedItem);
+    } else {
+      final newItem = Item(
+        name: name,
+        price: price,
+        taxRate: taxRate,
+        quantity: quantity,
+        memo: memo,
+        listId: widget.currentListId,
+        sortOrder: DateTime.now().millisecondsSinceEpoch,
+      );
+      await widget.ref.read(itemProvider.notifier).addItem(newItem);
+      await DatabaseHelper.instance.upsertHistory(name);
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.item != null;
+    return AlertDialog(
+      title: Text(isEdit ? '商品編集' : '商品追加'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ItemNameField(
+                controller: _nameCtrl,
+                historyNames: widget.historyNames,
+              ),
+              const SizedBox(height: 12),
+              PriceField(controller: _priceCtrl),
+              const SizedBox(height: 12),
+              TaxField(controller: _taxCtrl),
+              const SizedBox(height: 12),
+              QuantityField(controller: _quantityCtrl),
+              const SizedBox(height: 12),
+              MemoField(controller: _memoCtrl),
+            ],
           ),
         ),
-
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('キャンセル'),
-          ),
-
-          FilledButton(
-            onPressed: () async {
-              print('[DEBUG] 追加ボタン onPressed 開始');
-              final formState = formKey.currentState;
-              print('[DEBUG] formKey.currentState = $formState');
-              if (formState == null) {
-                print('[DEBUG] formState が null → return');
-                return;
-              }
-              final valid = formState.validate();
-              print('[DEBUG] validate() = $valid');
-              if (!valid) return;
-
-              final name = nameCtrl.text.trim();
-              final price = int.tryParse(priceCtrl.text) ?? 0;
-              final taxRate = (double.tryParse(taxCtrl.text) ?? 0) / 100;
-              final quantity = int.tryParse(quantityCtrl.text) ?? 1;
-              final memo = memoCtrl.text.trim();
-
-              try {
-                if (isEdit) {
-                  final updatedItem = item.copyWith(
-                    name: name,
-                    price: price,
-                    taxRate: taxRate,
-                    quantity: quantity,
-                    memo: memo,
-                  );
-                  await ref
-                      .read(itemProvider.notifier)
-                      .updateItem(updatedItem);
-                } else {
-                  final newItem = Item(
-                    name: name,
-                    price: price,
-                    taxRate: taxRate,
-                    quantity: quantity,
-                    memo: memo,
-                    listId: currentListId,
-                    sortOrder: DateTime.now().millisecondsSinceEpoch,
-                  );
-                  print('[DEBUG] addItem 呼び出し前');
-                  await ref.read(itemProvider.notifier).addItem(newItem);
-                  print('[DEBUG] addItem 完了');
-                  await DatabaseHelper.instance.upsertHistory(name);
-                }
-              } catch (e, st) {
-                print('[DEBUG] 例外発生: $e\n$st');
-                return;
-              }
-
-              print('[DEBUG] Navigator.pop 直前');
-              if (!dialogContext.mounted) return;
-              Navigator.of(dialogContext).pop();
-            },
-
-            child: Text(isEdit ? '保存' : '追加'),
-          ),
-        ],
-      );
-    },
-  );
-
-  nameCtrl.dispose();
-  priceCtrl.dispose();
-  taxCtrl.dispose();
-  quantityCtrl.dispose();
-  memoCtrl.dispose();
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(isEdit ? '保存' : '追加'),
+        ),
+      ],
+    );
+  }
 }
