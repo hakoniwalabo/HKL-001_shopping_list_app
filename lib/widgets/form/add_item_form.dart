@@ -14,11 +14,13 @@ class AddItemForm extends ConsumerStatefulWidget {
   final int currentListId;
   final List<String> historyNames;
   final Item? item;
+  final VoidCallback onCancel;
 
   const AddItemForm({
     super.key,
     required this.currentListId,
     required this.historyNames,
+    required this.onCancel,
     this.item,
   });
 
@@ -149,6 +151,23 @@ class AddItemFormState extends ConsumerState<AddItemForm> {
           const SizedBox(height: 12),
 
           MemoField(controller: _memoController),
+
+          const SizedBox(height: 24),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: widget.onCancel,
+                child: const Text('キャンセル'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: submit,
+                child: Text(widget.item != null ? '保存' : '追加'),
+              ),
+            ],
+          ),
         ],
       ),
     );

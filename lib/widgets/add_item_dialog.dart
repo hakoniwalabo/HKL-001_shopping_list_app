@@ -9,36 +9,21 @@ Future<void> showAddItemDialog({
   required List<String> historyNames,
   Item? item,
 }) async {
-  final isEdit = item != null;
-  final formKey = GlobalKey<AddItemFormState>();
-
   await showDialog(
     context: context,
 
     builder: (dialogContext) {
       return AlertDialog(
-        title: Text(isEdit ? '商品編集' : '商品追加'),
+        title: Text(item != null ? '商品編集' : '商品追加'),
 
         content: SingleChildScrollView(
           child: AddItemForm(
-            key: formKey,
             currentListId: currentListId,
             historyNames: historyNames,
             item: item,
+            onCancel: () => Navigator.of(dialogContext).pop(),
           ),
         ),
-
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('キャンセル'),
-          ),
-
-          FilledButton(
-            onPressed: () => formKey.currentState?.submit(),
-            child: Text(isEdit ? '保存' : '追加'),
-          ),
-        ],
       );
     },
   );
