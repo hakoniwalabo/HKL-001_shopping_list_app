@@ -185,7 +185,7 @@ Future<void> showAddItemDialog({
                   final memo = memoController.text.trim();
 
                   if (isEdit) {
-                    final updatedItem = item.copyWith(
+                    final updatedItem = item!.copyWith(
                       name: name,
                       price: price,
                       taxRate: (double.tryParse(taxController.text) ?? 0) / 100,
