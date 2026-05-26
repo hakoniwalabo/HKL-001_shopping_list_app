@@ -483,11 +483,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                         onTap: (item) => () {
                           showAddItemDialog(
                             context: context,
-                            ref: ref,
                             currentListId: currentListId,
                             historyNames: historyNames,
                             item: item,
-                            items: ref.read(itemProvider).value ?? [],
                           );
                         },
 
@@ -532,11 +530,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                         onTap: (item) => () {
                           showAddItemDialog(
                             context: context,
-                            ref: ref,
                             currentListId: currentListId,
                             historyNames: historyNames,
                             item: item,
-                            items: ref.read(itemProvider).value ?? [],
                           );
                         },
 
@@ -572,10 +568,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showAddItemDialog(
           context: context,
-          ref: ref,
           currentListId: currentListId,
           historyNames: historyNames,
-          items: ref.read(itemProvider).value ?? [],
         ),
 
         icon: const Icon(Icons.add),
