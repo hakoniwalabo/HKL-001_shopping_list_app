@@ -442,6 +442,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 72,
         title: Row(
           children: [
             Expanded(
