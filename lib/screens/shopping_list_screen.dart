@@ -65,24 +65,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
     final oldController = _tabController;
 
-    if (data.isNotEmpty) {
-      _tabController = TabController(
-        length: data.length,
-        vsync: this,
-        initialIndex: currentIndex == -1 ? 0 : currentIndex,
-      );
-
-      _tabController?.addListener(_handleTabChange);
-    } else {
-      _tabController = null;
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      shoppingLists = data;
-    });
-
     oldController?.removeListener(_handleTabChange);
     oldController?.dispose();
 
@@ -437,43 +419,29 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   Widget build(BuildContext context) {
     final itemAsync = ref.watch(itemProvider);
 
-    final items = itemAsync.value ?? [];
-    final checked = items.where((e) => e.isChecked).toList();
-
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 72,
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                shoppingLists.isEmpty
-                    ? '買い物リスト'
-                    : (() {
-                        try {
-                          return shoppingLists
-                              .firstWhere((e) => e.id == currentListId)
-                              .name;
-                        } catch (_) {
-                          return '買い物リスト';
-                        }
-                      })(),
-              ),
-            ),
-
-            ListManagementButtons(
-              onAddList: _showAddListDialog,
-
-              onRenameList: _showRenameListDialog,
-
-              onDeleteList: _showDeleteListDialog,
-
-              onDeleteChecked: checked.isEmpty
-                  ? null
-                  : _showDeleteCheckedDialog,
-            ),
-          ],
+        title: Text(
+          shoppingLists.isEmpty
+              ? '買い物リスト'
+              : (() {
+                  try {
+                    return shoppingLists
+                        .firstWhere((e) => e.id == currentListId)
+                        .name;
+                  } catch (_) {
+                    return '買い物リスト';
+                  }
+                })(),
         ),
+
+        actions: [
+          ListManagementButtons(
+            onAddList: _showAddListDialog,
+            onRenameList: _showRenameListDialog,
+            onDeleteList: _showDeleteListDialog,
+          ),
+        ],
 
         bottom: ListTabBar(
           shoppingLists: shoppingLists,
@@ -491,6 +459,18 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                 ? const EmptyStateView()
                 : ListView(
                     children: [
+                      if (checked.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: FilledButton.tonalIcon(
+                              onPressed: _showDeleteCheckedDialog,
+                              icon: const Icon(Icons.delete_sweep),
+                              label: const Text('購入済み削除'),
+                            ),
+                          ),
+                        ),
                       ListSection(
                         title: '未購入',
 

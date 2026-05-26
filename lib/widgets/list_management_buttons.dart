@@ -4,14 +4,12 @@ class ListManagementButtons extends StatelessWidget {
   final VoidCallback onAddList;
   final VoidCallback onRenameList;
   final VoidCallback onDeleteList;
-  final VoidCallback? onDeleteChecked;
 
   const ListManagementButtons({
     super.key,
     required this.onAddList,
     required this.onRenameList,
     required this.onDeleteList,
-    required this.onDeleteChecked,
   });
 
   @override
@@ -30,14 +28,6 @@ class ListManagementButtons extends StatelessWidget {
 
             IconButton(onPressed: onDeleteList, icon: const Icon(Icons.delete)),
           ],
-        ),
-
-        TextButton.icon(
-          onPressed: onDeleteChecked,
-
-          icon: const Icon(Icons.delete_sweep),
-
-          label: const Text('購入済み削除'),
         ),
       ],
     );
