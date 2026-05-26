@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class ItemNameField extends StatelessWidget {
+class ItemNameField extends StatefulWidget {
   final TextEditingController controller;
   final List<String> historyNames;
 
@@ -11,51 +11,87 @@ class ItemNameField extends StatelessWidget {
   });
 
   @override
+  State<ItemNameField> createState() => _ItemNameFieldState();
+}
+
+class _ItemNameFieldState extends State<ItemNameField> {
+  final _focusNode = FocusNode();
+  List<String> _suggestions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (_focusNode.hasFocus) {
+      _updateSuggestions(widget.controller.text);
+    } else {
+      setState(() => _suggestions = []);
+    }
+  }
+
+  void _updateSuggestions(String text) {
+    final filtered = text.isEmpty
+        ? widget.historyNames
+        : widget.historyNames
+            .where((n) => n.toLowerCase().contains(text.toLowerCase()))
+            .toList();
+    setState(() => _suggestions = filtered.take(8).toList());
+  }
+
+  void _selectSuggestion(String suggestion) {
+    widget.controller.text = suggestion;
+    _focusNode.unfocus();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Autocomplete<String>(
-      optionsBuilder: (textEditingValue) {
-        if (textEditingValue.text.isEmpty) {
-          return historyNames;
-        }
-
-        return historyNames
-            .where(
-              (option) => option.toLowerCase().contains(
-                textEditingValue.text.toLowerCase(),
-              ),
-            )
-            .take(100);
-      },
-
-      onSelected: (selection) {
-        controller.text = selection;
-      },
-
-      fieldViewBuilder: (context, autocompleteController, focusNode, _) {
-        // 編集モード時、Autocomplete内部controllerに初期値を反映する
-        if (autocompleteController.text.isEmpty && controller.text.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (autocompleteController.text.isEmpty) {
-              autocompleteController.text = controller.text;
-            }
-          });
-        }
-
-        return TextFormField(
-          controller: autocompleteController,
-          focusNode: focusNode,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextFormField(
+          controller: widget.controller,
+          focusNode: _focusNode,
           autofocus: true,
           decoration: const InputDecoration(labelText: '商品名'),
-          onChanged: (value) => controller.text = value,
+          onChanged: _updateSuggestions,
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return '商品名を入力してください';
             }
-
             return null;
           },
-        );
-      },
+        ),
+        if (_suggestions.isNotEmpty)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 140),
+            child: Material(
+              elevation: 2,
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: _suggestions.length,
+                itemBuilder: (context, index) {
+                  return ListTile(
+                    dense: true,
+                    title: Text(_suggestions[index]),
+                    onTap: () => _selectSuggestion(_suggestions[index]),
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
