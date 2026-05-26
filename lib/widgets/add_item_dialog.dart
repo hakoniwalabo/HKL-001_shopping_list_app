@@ -4,7 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database_helper.dart';
 import '../models/item.dart';
 import '../providers/item_provider.dart';
-import 'form/add_item_form.dart';
+import 'fields/item_name_field.dart';
+import 'fields/price_field.dart';
+import 'fields/tax_field.dart';
+import 'fields/quantity_field.dart';
+import 'fields/memo_field.dart';
 
 Future<void> showAddItemDialog({
   required BuildContext context,
@@ -16,17 +20,17 @@ Future<void> showAddItemDialog({
   final isEdit = item != null;
   final formKey = GlobalKey<FormState>();
 
-  final nameController = TextEditingController(text: item?.name ?? '');
-  final priceController = TextEditingController(
+  final nameCtrl = TextEditingController(text: item?.name ?? '');
+  final priceCtrl = TextEditingController(
     text: item?.price.toString() ?? '0',
   );
-  final taxController = TextEditingController(
+  final taxCtrl = TextEditingController(
     text: item != null ? (item.taxRate * 100).toInt().toString() : '0',
   );
-  final quantityController = TextEditingController(
+  final quantityCtrl = TextEditingController(
     text: item?.quantity.toString() ?? '1',
   );
-  final memoController = TextEditingController(text: item?.memo ?? '');
+  final memoCtrl = TextEditingController(text: item?.memo ?? '');
 
   await showDialog<void>(
     context: context,
@@ -36,14 +40,27 @@ Future<void> showAddItemDialog({
         title: Text(isEdit ? '商品編集' : '商品追加'),
 
         content: SingleChildScrollView(
-          child: AddItemForm(
-            formKey: formKey,
-            nameController: nameController,
-            priceController: priceController,
-            taxController: taxController,
-            quantityController: quantityController,
-            memoController: memoController,
-            historyNames: historyNames,
+          child: Form(
+            key: formKey,
+
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+
+              children: [
+                ItemNameField(
+                  controller: nameCtrl,
+                  historyNames: historyNames,
+                ),
+                const SizedBox(height: 12),
+                PriceField(controller: priceCtrl),
+                const SizedBox(height: 12),
+                TaxField(controller: taxCtrl),
+                const SizedBox(height: 12),
+                QuantityField(controller: quantityCtrl),
+                const SizedBox(height: 12),
+                MemoField(controller: memoCtrl),
+              ],
+            ),
           ),
         ),
 
@@ -55,15 +72,14 @@ Future<void> showAddItemDialog({
 
           FilledButton(
             onPressed: () async {
-              if (formKey.currentState?.validate() != true) return;
+              final formState = formKey.currentState;
+              if (formState == null || !formState.validate()) return;
 
-              final name = nameController.text.trim();
-              final price = int.tryParse(priceController.text) ?? 0;
-              final taxRate =
-                  (double.tryParse(taxController.text) ?? 0) / 100;
-              final quantity =
-                  int.tryParse(quantityController.text) ?? 1;
-              final memo = memoController.text.trim();
+              final name = nameCtrl.text.trim();
+              final price = int.tryParse(priceCtrl.text) ?? 0;
+              final taxRate = (double.tryParse(taxCtrl.text) ?? 0) / 100;
+              final quantity = int.tryParse(quantityCtrl.text) ?? 1;
+              final memo = memoCtrl.text.trim();
 
               if (isEdit) {
                 final updatedItem = item.copyWith(
@@ -73,7 +89,6 @@ Future<void> showAddItemDialog({
                   quantity: quantity,
                   memo: memo,
                 );
-
                 await ref
                     .read(itemProvider.notifier)
                     .updateItem(updatedItem);
@@ -87,13 +102,11 @@ Future<void> showAddItemDialog({
                   listId: currentListId,
                   sortOrder: DateTime.now().millisecondsSinceEpoch,
                 );
-
                 await ref.read(itemProvider.notifier).addItem(newItem);
                 await DatabaseHelper.instance.upsertHistory(name);
               }
 
               if (!dialogContext.mounted) return;
-
               Navigator.of(dialogContext).pop();
             },
 
@@ -104,9 +117,9 @@ Future<void> showAddItemDialog({
     },
   );
 
-  nameController.dispose();
-  priceController.dispose();
-  taxController.dispose();
-  quantityController.dispose();
-  memoController.dispose();
+  nameCtrl.dispose();
+  priceCtrl.dispose();
+  taxCtrl.dispose();
+  quantityCtrl.dispose();
+  memoCtrl.dispose();
 }
