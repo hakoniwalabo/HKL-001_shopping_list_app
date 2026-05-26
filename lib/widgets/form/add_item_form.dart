@@ -1,34 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../database/database_helper.dart';
 import '../../models/item.dart';
-import '../../providers/item_provider.dart';
 import '../fields/item_name_field.dart';
 import '../fields/price_field.dart';
 import '../fields/tax_field.dart';
 import '../fields/quantity_field.dart';
 import '../fields/memo_field.dart';
 
-class AddItemForm extends ConsumerStatefulWidget {
+class AddItemForm extends StatefulWidget {
   final int currentListId;
   final List<String> historyNames;
   final Item? item;
-  final VoidCallback onCancel;
+  final Future<void> Function(Item) onAddItem;
+  final Future<void> Function(Item) onUpdateItem;
+  final Future<void> Function(String) onUpsertHistory;
+  final VoidCallback onSuccess;
 
   const AddItemForm({
     super.key,
     required this.currentListId,
     required this.historyNames,
-    required this.onCancel,
+    required this.onAddItem,
+    required this.onUpdateItem,
+    required this.onUpsertHistory,
+    required this.onSuccess,
     this.item,
   });
 
   @override
-  ConsumerState<AddItemForm> createState() => AddItemFormState();
+  State<AddItemForm> createState() => AddItemFormState();
 }
 
-class AddItemFormState extends ConsumerState<AddItemForm> {
+class AddItemFormState extends State<AddItemForm> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameController;
@@ -100,7 +103,7 @@ class AddItemFormState extends ConsumerState<AddItemForm> {
         memo: memo,
       );
 
-      await ref.read(itemProvider.notifier).updateItem(updatedItem);
+      await widget.onUpdateItem(updatedItem);
     } else {
       final newItem = Item(
         name: name,
@@ -112,13 +115,13 @@ class AddItemFormState extends ConsumerState<AddItemForm> {
         sortOrder: DateTime.now().millisecondsSinceEpoch,
       );
 
-      await ref.read(itemProvider.notifier).addItem(newItem);
-      await DatabaseHelper.instance.upsertHistory(name);
+      await widget.onAddItem(newItem);
+      await widget.onUpsertHistory(name);
     }
 
     if (!mounted) return;
 
-    Navigator.of(context).pop();
+    widget.onSuccess();
   }
 
   @override
@@ -151,23 +154,6 @@ class AddItemFormState extends ConsumerState<AddItemForm> {
           const SizedBox(height: 12),
 
           MemoField(controller: _memoController),
-
-          const SizedBox(height: 24),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: widget.onCancel,
-                child: const Text('キャンセル'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: submit,
-                child: Text(widget.item != null ? '保存' : '追加'),
-              ),
-            ],
-          ),
         ],
       ),
     );
