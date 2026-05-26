@@ -12,7 +12,6 @@ import 'fields/memo_field.dart';
 
 Future<void> showAddItemDialog({
   required BuildContext context,
-  required WidgetRef ref,
   required int currentListId,
   required List<String> historyNames,
   Item? item,
@@ -20,7 +19,6 @@ Future<void> showAddItemDialog({
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => _AddItemDialogContent(
-      ref: ref,
       currentListId: currentListId,
       historyNames: historyNames,
       item: item,
@@ -28,24 +26,23 @@ Future<void> showAddItemDialog({
   );
 }
 
-class _AddItemDialogContent extends StatefulWidget {
-  final WidgetRef ref;
+class _AddItemDialogContent extends ConsumerStatefulWidget {
   final int currentListId;
   final List<String> historyNames;
   final Item? item;
 
   const _AddItemDialogContent({
-    required this.ref,
     required this.currentListId,
     required this.historyNames,
     this.item,
   });
 
   @override
-  State<_AddItemDialogContent> createState() => _AddItemDialogContentState();
+  ConsumerState<_AddItemDialogContent> createState() =>
+      _AddItemDialogContentState();
 }
 
-class _AddItemDialogContentState extends State<_AddItemDialogContent> {
+class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _priceCtrl;
@@ -96,7 +93,7 @@ class _AddItemDialogContentState extends State<_AddItemDialogContent> {
         quantity: quantity,
         memo: memo,
       );
-      await widget.ref.read(itemProvider.notifier).updateItem(updatedItem);
+      await ref.read(itemProvider.notifier).updateItem(updatedItem);
     } else {
       final newItem = Item(
         name: name,
@@ -107,7 +104,7 @@ class _AddItemDialogContentState extends State<_AddItemDialogContent> {
         listId: widget.currentListId,
         sortOrder: DateTime.now().millisecondsSinceEpoch,
       );
-      await widget.ref.read(itemProvider.notifier).addItem(newItem);
+      await ref.read(itemProvider.notifier).addItem(newItem);
       await DatabaseHelper.instance.upsertHistory(name);
     }
 
