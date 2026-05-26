@@ -94,6 +94,10 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
         memo: memo,
       );
       await ref.read(itemProvider.notifier).updateItem(updatedItem);
+      // 名前が変わった場合のみ履歴を更新（設計書 §8.9）
+      if (name != item.name) {
+        await DatabaseHelper.instance.upsertHistory(name);
+      }
     } else {
       final newItem = Item(
         name: name,

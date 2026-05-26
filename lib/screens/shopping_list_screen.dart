@@ -11,6 +11,7 @@ import '../widgets/list_section.dart';
 import '../widgets/empty_state_view.dart';
 import '../widgets/list_management_buttons.dart';
 import '../widgets/list_tab_bar.dart';
+import '../widgets/total_summary.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -98,6 +99,13 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   }
 
   Future<void> _showAddListDialog() async {
+    // 上限チェック（設計書 §8.10）
+    if (shoppingLists.length >= 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('リストは最大10件まで作成できます')),
+      );
+      return;
+    }
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => _SingleFieldDialog(
@@ -426,6 +434,15 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                               .read(itemProvider.notifier)
                               .reorderUncheckedItems(oldIndex, newIndex);
                         },
+                      ),
+
+                      // 合計表示（設計書 §5.2 / §8.8）
+                      TotalSummary(
+                        items: items,
+                        showDetailedTotal: showDetailedTotal,
+                        onToggle: () => setState(
+                          () => showDetailedTotal = !showDetailedTotal,
+                        ),
                       ),
 
                       const Divider(thickness: 1.5),
