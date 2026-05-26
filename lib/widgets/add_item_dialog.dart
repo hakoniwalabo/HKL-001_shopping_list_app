@@ -218,7 +218,6 @@ Future<void> showAddItemDialog({
                       quantity: quantity,
                       memo: memo,
                       listId: currentListId,
-                      sortOrder: DateTime.now().millisecondsSinceEpoch,
                     );
 
                     await ref.read(itemProvider.notifier).addItem(newItem);

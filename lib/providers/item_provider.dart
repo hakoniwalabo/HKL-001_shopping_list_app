@@ -25,9 +25,13 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
   Future<void> addItem(Item item) async {
     final current = state.value ?? [];
 
+    final maxSortOrder = current.isEmpty
+        ? 0
+        : current.map((e) => e.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+
     final newItem = item.copyWith(
-      sortOrder: current.length,
       listId: currentListId,
+      sortOrder: maxSortOrder,
     );
 
     final id = await DatabaseHelper.instance.insertItem(newItem);
