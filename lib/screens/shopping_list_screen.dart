@@ -63,8 +63,28 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
     final currentIndex = data.indexWhere((e) => e.id == currentListId);
 
-    _tabController?.removeListener(_handleTabChange);
-    _tabController?.dispose();
+    final oldController = _tabController;
+
+    if (data.isNotEmpty) {
+      _tabController = TabController(
+        length: data.length,
+        vsync: this,
+        initialIndex: currentIndex == -1 ? 0 : currentIndex,
+      );
+
+      _tabController?.addListener(_handleTabChange);
+    } else {
+      _tabController = null;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      shoppingLists = data;
+    });
+
+    oldController?.removeListener(_handleTabChange);
+    oldController?.dispose();
 
     if (data.isNotEmpty) {
       _tabController = TabController(
