@@ -1,17 +1,22 @@
-import 'package:flutter/material.dart';
-import '../models/item.dart';
-import '../database/database_helper.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/item_provider.dart';
-import 'package:intl/intl.dart';
-import '../models/shopping_list.dart';
 import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
+import '../database/database_helper.dart';
+import '../models/item.dart';
+import '../models/shopping_list.dart';
+import '../providers/item_provider.dart';
+import '../providers/purchase_provider.dart';
+import '../widgets/ad_banner.dart';
 import '../widgets/add_item_dialog.dart';
-import '../widgets/list_section.dart';
 import '../widgets/empty_state_view.dart';
 import '../widgets/list_management_buttons.dart';
+import '../widgets/list_section.dart';
 import '../widgets/list_tab_bar.dart';
 import '../widgets/total_summary.dart';
+import '../widgets/upgrade_dialog.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -345,12 +350,26 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   @override
   Widget build(BuildContext context) {
     final itemAsync = ref.watch(itemProvider);
+    final isAdFree = ref.watch(purchaseProvider).maybeWhen(
+      data: (v) => v,
+      orElse: () => false,
+    );
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('買い物リスト'),
 
         actions: [
+          // 広告なしアップグレードボタン（購入済みの場合は非表示）
+          if (!isAdFree)
+            IconButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const UpgradeDialog(),
+              ),
+              icon: const Icon(Icons.star_outline),
+              tooltip: '広告を削除',
+            ),
           ListManagementButtons(
             onAddList: _showAddListDialog,
             onDeleteList: _showDeleteListDialog,
@@ -363,7 +382,10 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           onRenameTab: _showRenameListDialog,
         ),
       ),
-      body: itemAsync.when(
+      body: Column(
+        children: [
+          Expanded(
+            child: itemAsync.when(
         data: (items) {
           final unchecked = items.where((e) => !e.isChecked).toList();
           final checked = items.where((e) => e.isChecked).toList();
@@ -503,6 +525,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         loading: () => const Center(child: CircularProgressIndicator()),
 
         error: (error, stack) => Center(child: Text('Error: $error')),
+          ),
+          ),
+          // バナー広告（広告なし購入済みの場合は非表示）
+          if (!isAdFree) const AdBannerWidget(),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
