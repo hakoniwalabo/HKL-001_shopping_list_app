@@ -11,6 +11,10 @@ class QuantityField extends StatelessWidget {
       controller: controller,
       keyboardType: TextInputType.number,
       decoration: const InputDecoration(labelText: '数量'),
+      onTap: () => controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: controller.text.length,
+      ),
     );
   }
 }

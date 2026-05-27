@@ -11,6 +11,10 @@ class TaxField extends StatelessWidget {
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: const InputDecoration(labelText: '税率（%）'),
+      onTap: () => controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: controller.text.length,
+      ),
       validator: (value) {
         final tax = double.tryParse(value ?? '');
 

@@ -12,6 +12,10 @@ class PriceField extends StatelessWidget {
       controller: controller,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       decoration: const InputDecoration(labelText: '価格'),
+      onTap: () => controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: controller.text.length,
+      ),
       validator: (value) {
         final price = int.tryParse(value ?? '');
 

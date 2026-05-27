@@ -174,23 +174,32 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
               onPressed: () async {
                 final navigator = Navigator.of(context);
 
+                // 削除前に現在のインデックスを保存（削除後は左隣へ）
+                final deletedIndex = shoppingLists.indexWhere(
+                  (e) => e.id == currentListId,
+                );
+
                 await DatabaseHelper.instance.deleteList(currentListId);
 
                 await loadLists();
 
                 if (!mounted) return;
 
-                _tabController?.animateTo(0);
-
                 if (shoppingLists.isEmpty) {
+                  navigator.pop();
                   return;
                 }
 
-                final nextList = shoppingLists.first;
+                // 1つ左を選択（先頭を削除した場合は先頭のまま）
+                final nextIndex = (deletedIndex - 1).clamp(
+                  0,
+                  shoppingLists.length - 1,
+                );
+                _tabController?.animateTo(nextIndex);
 
                 navigator.pop();
 
-                await changeList(nextList.id!);
+                await changeList(shoppingLists[nextIndex].id!);
               },
 
               child: const Text('削除'),
@@ -403,12 +412,15 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                               numberFormat: numberFormat,
 
                               onTap: (item) => () {
+                                // ダイアログを閉じた後に履歴を再読み込み（§8.9）
                                 showAddItemDialog(
                                   context: context,
                                   currentListId: currentListId,
                                   historyNames: historyNames,
                                   item: item,
-                                );
+                                ).then((_) {
+                                  if (mounted) loadHistory();
+                                });
                               },
 
                               onToggleCheck: (item) async {
@@ -455,7 +467,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                                   currentListId: currentListId,
                                   historyNames: historyNames,
                                   item: item,
-                                );
+                                ).then((_) {
+                                  if (mounted) loadHistory();
+                                });
                               },
 
                               onToggleCheck: (item) async {
@@ -491,11 +505,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         error: (error, stack) => Center(child: Text('Error: $error')),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showAddItemDialog(
-          context: context,
-          currentListId: currentListId,
-          historyNames: historyNames,
-        ),
+        onPressed: () async {
+          await showAddItemDialog(
+            context: context,
+            currentListId: currentListId,
+            historyNames: historyNames,
+          );
+          if (mounted) await loadHistory();
+        },
 
         icon: const Icon(Icons.add),
         label: const Text('追加'),

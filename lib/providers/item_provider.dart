@@ -62,10 +62,8 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
     final unchecked = current.where((e) => !e.isChecked).toList();
     final checked = current.where((e) => e.isChecked).toList();
 
-    if (newIndex > oldIndex) {
-      newIndex--;
-    }
-
+    // onReorderItem は removal 後の挿入インデックスを返すため、
+    // onReorder と異なり newIndex-- の補正は不要
     final movedItem = unchecked.removeAt(oldIndex);
     unchecked.insert(newIndex, movedItem);
 
