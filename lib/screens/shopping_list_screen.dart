@@ -201,18 +201,16 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     );
   }
 
-  Future<void> _showRenameListDialog() async {
-    final currentList = shoppingLists.firstWhere((e) => e.id == currentListId);
-
+  Future<void> _showRenameListDialog(ShoppingList list) async {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => _SingleFieldDialog(
-        title: 'リスト名変更',
-        labelText: 'リスト名',
-        initialText: currentList.name,
+        title: 'タブ名変更',
+        labelText: 'タブ名',
+        initialText: list.name,
         submitLabel: '変更',
         onSubmit: (newName) async {
-          await DatabaseHelper.instance.updateListName(currentListId, newName);
+          await DatabaseHelper.instance.updateListName(list.id!, newName);
           await loadLists();
           if (!mounted) return;
           setState(() {});
@@ -341,24 +339,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          shoppingLists.isEmpty
-              ? '買い物リスト'
-              : (() {
-                  try {
-                    return shoppingLists
-                        .firstWhere((e) => e.id == currentListId)
-                        .name;
-                  } catch (_) {
-                    return '買い物リスト';
-                  }
-                })(),
-        ),
+        title: const Text('買い物リスト'),
 
         actions: [
           ListManagementButtons(
             onAddList: _showAddListDialog,
-            onRenameList: _showRenameListDialog,
             onDeleteList: _showDeleteListDialog,
           ),
         ],
@@ -366,133 +351,144 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         bottom: ListTabBar(
           shoppingLists: shoppingLists,
           tabController: _tabController,
+          onRenameTab: _showRenameListDialog,
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12),
-        child: itemAsync.when(
-          data: (items) {
-            final unchecked = items.where((e) => !e.isChecked).toList();
-            final checked = items.where((e) => e.isChecked).toList();
+      body: itemAsync.when(
+        data: (items) {
+          final unchecked = items.where((e) => !e.isChecked).toList();
+          final checked = items.where((e) => e.isChecked).toList();
 
-            return items.isEmpty
-                ? const EmptyStateView()
-                : ListView(
-                    children: [
-                      if (checked.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: FilledButton.tonalIcon(
-                              onPressed: _showDeleteCheckedDialog,
-                              icon: const Icon(Icons.delete_sweep),
-                              label: const Text('購入済み削除'),
+          return Column(
+            children: [
+              // 合計表示（タブ直下・設計書 §5.2 / §8.8）
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                child: TotalSummary(
+                  items: items,
+                  showDetailedTotal: showDetailedTotal,
+                  onToggle: () => setState(
+                    () => showDetailedTotal = !showDetailedTotal,
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              // リスト本体
+              Expanded(
+                child: items.isEmpty
+                    ? const EmptyStateView()
+                    : Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: ListView(
+                          children: [
+                            if (checked.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: FilledButton.tonalIcon(
+                                    onPressed: _showDeleteCheckedDialog,
+                                    icon: const Icon(Icons.delete_sweep),
+                                    label: const Text('購入済み削除'),
+                                  ),
+                                ),
+                              ),
+                            ListSection(
+                              title: '未購入',
+
+                              items: unchecked,
+
+                              reorderable: true,
+
+                              numberFormat: numberFormat,
+
+                              onTap: (item) => () {
+                                showAddItemDialog(
+                                  context: context,
+                                  currentListId: currentListId,
+                                  historyNames: historyNames,
+                                  item: item,
+                                );
+                              },
+
+                              onToggleCheck: (item) async {
+                                await ref
+                                    .read(itemProvider.notifier)
+                                    .toggleCheck(item.id!);
+                              },
+
+                              onDelete: (item) async {
+                                final deleted = await ref
+                                    .read(itemProvider.notifier)
+                                    .deleteItemById(item.id!);
+
+                                if (deleted != null) {
+                                  _pendingUndoItems = [deleted];
+                                }
+
+                                if (!mounted) return;
+
+                                _showUndoSnackBar(message: '削除しました');
+                              },
+
+                              onReorder: (oldIndex, newIndex) async {
+                                await ref
+                                    .read(itemProvider.notifier)
+                                    .reorderUncheckedItems(oldIndex, newIndex);
+                              },
                             ),
-                          ),
-                        ),
-                      ListSection(
-                        title: '未購入',
 
-                        items: unchecked,
+                            const Divider(thickness: 1.5),
 
-                        reorderable: true,
+                            ListSection(
+                              title: '購入済',
 
-                        numberFormat: numberFormat,
+                              items: checked,
 
-                        onTap: (item) => () {
-                          showAddItemDialog(
-                            context: context,
-                            currentListId: currentListId,
-                            historyNames: historyNames,
-                            item: item,
-                          );
-                        },
+                              reorderable: false,
 
-                        onToggleCheck: (item) async {
-                          await ref
-                              .read(itemProvider.notifier)
-                              .toggleCheck(item.id!);
-                        },
+                              numberFormat: numberFormat,
 
-                        onDelete: (item) async {
-                          final deleted = await ref
-                              .read(itemProvider.notifier)
-                              .deleteItemById(item.id!);
+                              onTap: (item) => () {
+                                showAddItemDialog(
+                                  context: context,
+                                  currentListId: currentListId,
+                                  historyNames: historyNames,
+                                  item: item,
+                                );
+                              },
 
-                          if (deleted != null) {
-                            _pendingUndoItems = [deleted];
-                          }
+                              onToggleCheck: (item) async {
+                                await ref
+                                    .read(itemProvider.notifier)
+                                    .toggleCheck(item.id!);
+                              },
 
-                          if (!mounted) return;
+                              onDelete: (item) async {
+                                final deleted = await ref
+                                    .read(itemProvider.notifier)
+                                    .deleteItemById(item.id!);
 
-                          _showUndoSnackBar(message: '削除しました');
-                        },
+                                if (deleted != null) {
+                                  _pendingUndoItems = [deleted];
+                                }
 
-                        onReorder: (oldIndex, newIndex) async {
-                          await ref
-                              .read(itemProvider.notifier)
-                              .reorderUncheckedItems(oldIndex, newIndex);
-                        },
-                      ),
+                                if (!mounted) return;
 
-                      // 合計表示（設計書 §5.2 / §8.8）
-                      TotalSummary(
-                        items: items,
-                        showDetailedTotal: showDetailedTotal,
-                        onToggle: () => setState(
-                          () => showDetailedTotal = !showDetailedTotal,
+                                _showUndoSnackBar(message: '削除しました');
+                              },
+                            ),
+                          ],
                         ),
                       ),
+              ),
+            ],
+          );
+        },
 
-                      const Divider(thickness: 1.5),
+        loading: () => const Center(child: CircularProgressIndicator()),
 
-                      ListSection(
-                        title: '購入済',
-
-                        items: checked,
-
-                        reorderable: false,
-
-                        numberFormat: numberFormat,
-
-                        onTap: (item) => () {
-                          showAddItemDialog(
-                            context: context,
-                            currentListId: currentListId,
-                            historyNames: historyNames,
-                            item: item,
-                          );
-                        },
-
-                        onToggleCheck: (item) async {
-                          await ref
-                              .read(itemProvider.notifier)
-                              .toggleCheck(item.id!);
-                        },
-
-                        onDelete: (item) async {
-                          final deleted = await ref
-                              .read(itemProvider.notifier)
-                              .deleteItemById(item.id!);
-
-                          if (deleted != null) {
-                            _pendingUndoItems = [deleted];
-                          }
-
-                          if (!mounted) return;
-
-                          _showUndoSnackBar(message: '削除しました');
-                        },
-                      ),
-                    ],
-                  );
-          },
-
-          loading: () => const Center(child: CircularProgressIndicator()),
-
-          error: (error, stack) => Center(child: Text('Error: $error')),
-        ),
+        error: (error, stack) => Center(child: Text('Error: $error')),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showAddItemDialog(

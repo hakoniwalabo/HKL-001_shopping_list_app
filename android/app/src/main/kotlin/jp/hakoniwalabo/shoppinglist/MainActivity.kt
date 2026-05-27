@@ -1,4 +1,4 @@
-package com.example.shopping_list_app
+package jp.hakoniwalabo.shoppinglist
 
 import io.flutter.embedding.android.FlutterActivity
 

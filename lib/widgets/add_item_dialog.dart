@@ -106,7 +106,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
         quantity: quantity,
         memo: memo,
         listId: widget.currentListId,
-        sortOrder: DateTime.now().millisecondsSinceEpoch,
       );
       await ref.read(itemProvider.notifier).addItem(newItem);
       await DatabaseHelper.instance.upsertHistory(name);
