@@ -65,51 +65,53 @@ void main() {
   });
 
   // --------------------------------------------------------
-  // 合計計算（設計書 §8.8 の計算式を検証）
+  // 合計計算（設計書 §8.8）
+  // price は税込単価として保存:
+  //   税込合計 = price × quantity
+  //   税別合計 = price × quantity / (1 + taxRate)
   // --------------------------------------------------------
   group('合計計算', () {
-    double taxIncluded(Item item) =>
-        item.price * item.quantity * (1 + item.taxRate);
+    // TotalSummary と同じ計算式
+    double taxIncluded(Item item) => item.price * item.quantity.toDouble();
+    double taxExcluded(Item item) =>
+        item.price * item.quantity / (1 + item.taxRate);
 
-    int taxExcluded(Item item) => item.price * item.quantity;
-
-    test('税込: price × quantity × (1 + taxRate)', () {
+    test('税込: price × quantity（price は税込単価）', () {
+      // 税込110円 × 3個 = 330円
       final item = Item(
-          name: 'りんご', price: 100, taxRate: 0.10, quantity: 3, listId: 1);
-      // 100 × 3 × 1.10 = 330.0
+          name: 'りんご', price: 110, taxRate: 0.10, quantity: 3, listId: 1);
       expect(taxIncluded(item), 330.0);
     });
 
-    test('税別: price × quantity', () {
+    test('税別: price × quantity / (1 + taxRate)', () {
+      // 税込110円 ÷ 1.10 × 3個 = 300円
       final item = Item(
-          name: 'りんご', price: 100, taxRate: 0.10, quantity: 3, listId: 1);
-      // 100 × 3 = 300
-      expect(taxExcluded(item), 300);
+          name: 'りんご', price: 110, taxRate: 0.10, quantity: 3, listId: 1);
+      expect(taxExcluded(item), closeTo(300.0, 0.01));
     });
 
-    test('taxRate 0.08 (軽減税率) の税込計算', () {
+    test('taxRate 0.08（軽減税率）の税別計算', () {
+      // 税込216円 ÷ 1.08 × 2個 = 400円
       final item = Item(
-          name: '牛乳', price: 200, taxRate: 0.08, quantity: 2, listId: 1);
-      // 200 × 2 × 1.08 = 432.0
-      expect(taxIncluded(item), closeTo(432.0, 0.01));
+          name: '牛乳', price: 216, taxRate: 0.08, quantity: 2, listId: 1);
+      expect(taxExcluded(item), closeTo(400.0, 0.01));
     });
 
-    test('税率 0 のとき税込 = 税別', () {
+    test('taxRate 0（追加時デフォルト）のとき税込 = 税別', () {
+      // 追加時は taxRate=0.0 固定なので tax-in = tax-ex
       final item = Item(
           name: '無税品', price: 500, taxRate: 0.0, quantity: 1, listId: 1);
-      expect(taxIncluded(item), taxExcluded(item).toDouble());
+      expect(taxIncluded(item), taxExcluded(item));
     });
 
-    test('複数商品の合計', () {
+    test('複数商品の税込合計', () {
       final items = [
-        Item(name: 'A', price: 100, taxRate: 0.10, quantity: 2, listId: 1),
-        Item(name: 'B', price: 200, taxRate: 0.08, quantity: 1, listId: 1),
+        Item(name: 'A', price: 110, taxRate: 0.10, quantity: 2, listId: 1),
+        Item(name: 'B', price: 216, taxRate: 0.08, quantity: 1, listId: 1),
       ];
-      final total = items.fold<double>(
-        0,
-        (sum, e) => sum + e.price * e.quantity * (1 + e.taxRate),
-      );
-      // (100×2×1.10) + (200×1×1.08) = 220 + 216 = 436.0
+      final total =
+          items.fold<double>(0, (sum, e) => sum + e.price * e.quantity);
+      // (110×2) + (216×1) = 220 + 216 = 436
       expect(total, closeTo(436.0, 0.01));
     });
   });

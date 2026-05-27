@@ -80,12 +80,13 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
 
     final name = _nameCtrl.text.trim();
     final price = int.tryParse(_priceCtrl.text) ?? 0;
-    final taxRate = (double.tryParse(_taxCtrl.text) ?? 0) / 100;
     final quantity = int.tryParse(_quantityCtrl.text) ?? 1;
-    final memo = _memoCtrl.text.trim();
 
     final item = widget.item;
     if (item != null) {
+      // 編集時: 税率・メモも反映
+      final taxRate = (double.tryParse(_taxCtrl.text) ?? 0) / 100;
+      final memo = _memoCtrl.text.trim();
       final updatedItem = item.copyWith(
         name: name,
         price: price,
@@ -99,12 +100,13 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
         await DatabaseHelper.instance.upsertHistory(name);
       }
     } else {
+      // 追加時: 税込価格をそのまま保存・taxRate=0固定・memo=空固定
       final newItem = Item(
         name: name,
         price: price,
-        taxRate: taxRate,
+        taxRate: 0.0,
         quantity: quantity,
-        memo: memo,
+        memo: '',
         listId: widget.currentListId,
       );
       await ref.read(itemProvider.notifier).addItem(newItem);
@@ -126,6 +128,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 追加・編集 共通
               ItemNameField(
                 controller: _nameCtrl,
                 historyNames: widget.historyNames,
@@ -133,11 +136,14 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
               const SizedBox(height: 12),
               PriceField(controller: _priceCtrl),
               const SizedBox(height: 12),
-              TaxField(controller: _taxCtrl),
-              const SizedBox(height: 12),
               QuantityField(controller: _quantityCtrl),
-              const SizedBox(height: 12),
-              MemoField(controller: _memoCtrl),
+              // 編集時のみ: 税率・メモを表示
+              if (isEdit) ...[
+                const SizedBox(height: 12),
+                TaxField(controller: _taxCtrl),
+                const SizedBox(height: 12),
+                MemoField(controller: _memoCtrl),
+              ],
             ],
           ),
         ),

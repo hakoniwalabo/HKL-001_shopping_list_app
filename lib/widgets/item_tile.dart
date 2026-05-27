@@ -67,7 +67,7 @@ class ItemTile extends StatelessWidget {
             Text(
               '単価: ¥${numberFormat.format(item.price)} / '
               '個数: ${item.quantity} / '
-              '税込合計: ¥${numberFormat.format(((item.price * item.quantity) * (1 + item.taxRate)).toInt())}',
+              '税込合計: ¥${numberFormat.format(item.price * item.quantity)}',
             ),
 
             if (item.memo.isNotEmpty)

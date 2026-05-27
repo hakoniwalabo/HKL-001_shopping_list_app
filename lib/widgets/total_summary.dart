@@ -15,19 +15,26 @@ class TotalSummary extends StatelessWidget {
   List<Item> checkedItems(List<Item> items) =>
       items.where((e) => e.isChecked).toList();
 
-  int uncheckedSubtotal(List<Item> items) =>
-      uncheckedItems(items).fold(0, (s, e) => s + (e.price * e.quantity));
+  // price は税込単価として保存されているため:
+  //   税込合計 = price × quantity
+  //   税別合計 = price × quantity / (1 + taxRate)
+  double uncheckedSubtotal(List<Item> items) => uncheckedItems(items).fold(
+    0.0,
+    (s, e) => s + e.price * e.quantity / (1 + e.taxRate),
+  );
 
   double uncheckedTotal(List<Item> items) => uncheckedItems(
     items,
-  ).fold(0, (s, e) => s + (e.price * e.quantity) * (1 + e.taxRate));
+  ).fold(0.0, (s, e) => s + e.price * e.quantity);
 
-  int checkedSubtotal(List<Item> items) =>
-      checkedItems(items).fold(0, (s, e) => s + (e.price * e.quantity));
+  double checkedSubtotal(List<Item> items) => checkedItems(items).fold(
+    0.0,
+    (s, e) => s + e.price * e.quantity / (1 + e.taxRate),
+  );
 
   double checkedTotal(List<Item> items) => checkedItems(
     items,
-  ).fold(0, (s, e) => s + (e.price * e.quantity) * (1 + e.taxRate));
+  ).fold(0.0, (s, e) => s + e.price * e.quantity);
 
   TotalSummary({
     super.key,

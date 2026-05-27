@@ -1,6 +1,6 @@
 class Item {
   final String name;
-  final int price;
+  final int price; // 税込単価（追加時は税込価格をそのまま保存、taxRate=0.0固定）
   final double taxRate;
   final bool isChecked;
   final int? id;
