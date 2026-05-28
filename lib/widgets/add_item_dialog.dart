@@ -6,7 +6,6 @@ import '../models/item.dart';
 import '../providers/item_provider.dart';
 import 'fields/item_name_field.dart';
 import 'fields/price_field.dart';
-import 'fields/tax_field.dart';
 import 'fields/quantity_field.dart';
 import 'fields/memo_field.dart';
 
@@ -46,7 +45,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _priceCtrl;
-  late final TextEditingController _taxCtrl;
   late final TextEditingController _quantityCtrl;
   late final TextEditingController _memoCtrl;
 
@@ -56,9 +54,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
     final item = widget.item;
     _nameCtrl = TextEditingController(text: item?.name ?? '');
     _priceCtrl = TextEditingController(text: item?.price.toString() ?? '0');
-    _taxCtrl = TextEditingController(
-      text: item != null ? (item.taxRate * 100).toInt().toString() : '0',
-    );
     _quantityCtrl = TextEditingController(
       text: item?.quantity.toString() ?? '1',
     );
@@ -69,7 +64,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
   void dispose() {
     _nameCtrl.dispose();
     _priceCtrl.dispose();
-    _taxCtrl.dispose();
     _quantityCtrl.dispose();
     _memoCtrl.dispose();
     super.dispose();
@@ -84,13 +78,11 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
 
     final item = widget.item;
     if (item != null) {
-      // 編集時: 税率・メモも反映
-      final taxRate = (double.tryParse(_taxCtrl.text) ?? 0) / 100;
+      // 編集時: メモも反映
       final memo = _memoCtrl.text.trim();
       final updatedItem = item.copyWith(
         name: name,
         price: price,
-        taxRate: taxRate,
         quantity: quantity,
         memo: memo,
       );
@@ -100,11 +92,10 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
         await DatabaseHelper.instance.upsertHistory(name);
       }
     } else {
-      // 追加時: 税込価格をそのまま保存・taxRate=0固定・memo=空固定
+      // 追加時: 税込価格をそのまま保存・memo=空固定
       final newItem = Item(
         name: name,
         price: price,
-        taxRate: 0.0,
         quantity: quantity,
         memo: '',
         listId: widget.currentListId,
@@ -137,10 +128,8 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
               PriceField(controller: _priceCtrl),
               const SizedBox(height: 12),
               QuantityField(controller: _quantityCtrl),
-              // 編集時のみ: 税率・メモを表示
+              // 編集時のみ: メモを表示
               if (isEdit) ...[
-                const SizedBox(height: 12),
-                TaxField(controller: _taxCtrl),
                 const SizedBox(height: 12),
                 MemoField(controller: _memoCtrl),
               ],

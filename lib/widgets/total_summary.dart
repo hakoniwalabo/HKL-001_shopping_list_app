@@ -3,119 +3,37 @@ import 'package:intl/intl.dart';
 
 import '../models/item.dart';
 
+/// 税込合計の表示ウィジェット（タブ直下固定）
+///
+/// price は税込単価として保存されているため、合計 = sum(price × quantity)。
 class TotalSummary extends StatelessWidget {
   final List<Item> items;
-  final bool showDetailedTotal;
-  final VoidCallback onToggle;
-  final numberFormat = NumberFormat('#,###');
 
-  List<Item> uncheckedItems(List<Item> items) =>
-      items.where((e) => !e.isChecked).toList();
+  const TotalSummary({super.key, required this.items});
 
-  List<Item> checkedItems(List<Item> items) =>
-      items.where((e) => e.isChecked).toList();
-
-  // price は税込単価として保存されているため:
-  //   税込合計 = price × quantity
-  //   税別合計 = price × quantity / (1 + taxRate)
-  double uncheckedSubtotal(List<Item> items) => uncheckedItems(items).fold(
-    0.0,
-    (s, e) => s + e.price * e.quantity / (1 + e.taxRate),
-  );
-
-  double uncheckedTotal(List<Item> items) => uncheckedItems(
-    items,
-  ).fold(0.0, (s, e) => s + e.price * e.quantity);
-
-  double checkedSubtotal(List<Item> items) => checkedItems(items).fold(
-    0.0,
-    (s, e) => s + e.price * e.quantity / (1 + e.taxRate),
-  );
-
-  double checkedTotal(List<Item> items) => checkedItems(
-    items,
-  ).fold(0.0, (s, e) => s + e.price * e.quantity);
-
-  TotalSummary({
-    super.key,
-    required this.items,
-    required this.showDetailedTotal,
-    required this.onToggle,
-  });
+  static int _sum(List<Item> items) =>
+      items.fold(0, (s, e) => s + e.price * e.quantity);
 
   @override
   Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,###');
+    final unchecked = items.where((e) => !e.isChecked).toList();
+    final checked = items.where((e) => e.isChecked).toList();
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-
-        onTap: onToggle,
-
-        child: AnimatedCrossFade(
-          duration: const Duration(milliseconds: 200),
-
-          crossFadeState: showDetailedTotal
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-
-          firstChild: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '未購入 ¥${numberFormat.format(uncheckedTotal(items).toInt())}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-
-                Text(
-                  '購入済 ¥${numberFormat.format(checkedTotal(items).toInt())}',
-                  style: const TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '未購入 ¥${fmt.format(_sum(unchecked))}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-
-          secondChild: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-
-              children: [
-                Text(
-                  '未購入',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-
-                Text(
-                  '税別 ¥${numberFormat.format(uncheckedSubtotal(items).toInt())}',
-                ),
-
-                Text(
-                  '税込 ¥${numberFormat.format(uncheckedTotal(items).toInt())}',
-                ),
-
-                const SizedBox(height: 12),
-
-                Text(
-                  '購入済',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                  ),
-                ),
-
-                Text(
-                  '税別 ¥${numberFormat.format(checkedSubtotal(items).toInt())}',
-                ),
-
-                Text('税込 ¥${numberFormat.format(checkedTotal(items).toInt())}'),
-              ],
-            ),
+          Text(
+            '購入済 ¥${fmt.format(_sum(checked))}',
+            style: const TextStyle(color: Colors.grey),
           ),
-        ),
+        ],
       ),
     );
   }

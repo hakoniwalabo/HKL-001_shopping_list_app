@@ -34,7 +34,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   TabController? _tabController;
 
   int currentListId = 1;
-  bool showDetailedTotal = false;
   bool _isChangingTab = false;
   final numberFormat = NumberFormat('#,###');
 
@@ -395,13 +394,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
               // 合計表示（タブ直下・設計書 §5.2 / §8.8）
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: TotalSummary(
-                  items: items,
-                  showDetailedTotal: showDetailedTotal,
-                  onToggle: () => setState(
-                    () => showDetailedTotal = !showDetailedTotal,
-                  ),
-                ),
+                child: TotalSummary(items: items),
               ),
               const Divider(height: 1),
               // リスト本体

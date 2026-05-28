@@ -21,7 +21,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -33,7 +33,6 @@ CREATE TABLE items(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT,
   price INTEGER,
-  taxRate REAL,
   isChecked INTEGER,
   createdAt INTEGER,
   sortOrder INTEGER,
@@ -105,6 +104,29 @@ CREATE TABLE IF NOT EXISTS lists(
       } catch (_) {
         // カラムが既に存在する場合は無視
       }
+    }
+
+    // version 4 → 5: taxRate カラムを削除（SQLite は DROP COLUMN 非対応のためテーブル再作成）
+    if (oldVersion < 5) {
+      await db.execute('''
+CREATE TABLE items_new(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT,
+  price INTEGER,
+  isChecked INTEGER,
+  createdAt INTEGER,
+  sortOrder INTEGER,
+  quantity INTEGER,
+  memo TEXT,
+  listId INTEGER
+)
+''');
+      await db.execute('''
+INSERT INTO items_new(id, name, price, isChecked, createdAt, sortOrder, quantity, memo, listId)
+SELECT id, name, price, isChecked, createdAt, sortOrder, quantity, memo, listId FROM items
+''');
+      await db.execute('DROP TABLE items');
+      await db.execute('ALTER TABLE items_new RENAME TO items');
     }
   }
 
