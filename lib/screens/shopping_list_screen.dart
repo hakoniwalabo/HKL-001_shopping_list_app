@@ -15,6 +15,7 @@ import '../widgets/empty_state_view.dart';
 import '../widgets/list_management_buttons.dart';
 import '../widgets/list_section.dart';
 import '../widgets/list_tab_bar.dart';
+import '../widgets/help_dialog.dart';
 import '../widgets/total_summary.dart';
 import '../widgets/upgrade_dialog.dart';
 
@@ -369,6 +370,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
               icon: const Icon(Icons.star_outline),
               tooltip: '広告を削除',
             ),
+          IconButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => const HelpDialog(),
+            ),
+            icon: const Icon(Icons.help_outline),
+            tooltip: '使い方',
+          ),
           ListManagementButtons(
             onAddList: _showAddListDialog,
             onDeleteList: _showDeleteListDialog,
