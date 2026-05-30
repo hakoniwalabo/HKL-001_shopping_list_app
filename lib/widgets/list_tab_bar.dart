@@ -25,10 +25,14 @@ class ListTabBar extends StatelessWidget implements PreferredSizeWidget {
       isScrollable: true,
       tabs: [
         for (final list in shoppingLists)
-          GestureDetector(
-            // 長押しでタブ名変更
-            onLongPress: () => onRenameTab?.call(list),
-            child: Tab(text: list.name),
+          // GestureDetector を Tab の外ではなく中に置く。
+          // TabBar が各タブに被せる InkWell とジェスチャーが競合しないようにするため。
+          Tab(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onLongPress: () => onRenameTab?.call(list),
+              child: Text(list.name),
+            ),
           ),
       ],
     );
