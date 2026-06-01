@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-/// テスト用バナー広告ユニット ID
-/// 本番リリース前に admob.google.com で取得した ID に差し替えること
-const _kBannerAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
+const _kBannerAdUnitId = 'ca-app-pub-2270566790559060/6213039801';
 
 class AdBannerWidget extends StatefulWidget {
   const AdBannerWidget({super.key});
