@@ -15,15 +15,23 @@ class _AdBannerWidgetState extends State<AdBannerWidget> {
   bool _loaded = false;
 
   @override
-  void initState() {
-    super.initState();
-    _loadAd();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Context が使えるタイミングで画面幅を取得して読み込む
+    if (_ad == null) {
+      _loadAd();
+    }
   }
 
-  void _loadAd() {
+  Future<void> _loadAd() async {
+    final width = MediaQuery.of(context).size.width.truncate();
+    final adSize =
+        await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(width);
+    if (adSize == null || !mounted) return;
+
     _ad = BannerAd(
       adUnitId: _kBannerAdUnitId,
-      size: AdSize.banner,
+      size: adSize,
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (_) {
