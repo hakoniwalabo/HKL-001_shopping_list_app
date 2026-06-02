@@ -360,7 +360,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         title: const Text('買い物リスト'),
 
         actions: [
-          // 広告なしアップグレードボタン（購入済みの場合は非表示）
           if (!isAdFree)
             IconButton(
               onPressed: () => showDialog<void>(
@@ -370,6 +369,10 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
               icon: const Icon(Icons.star_outline),
               tooltip: '広告を削除',
             ),
+          ListManagementButtons(
+            onAddList: _showAddListDialog,
+            onDeleteList: _showDeleteListDialog,
+          ),
           IconButton(
             onPressed: () => showDialog<void>(
               context: context,
@@ -377,10 +380,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
             ),
             icon: const Icon(Icons.help_outline),
             tooltip: '使い方',
-          ),
-          ListManagementButtons(
-            onAddList: _showAddListDialog,
-            onDeleteList: _showDeleteListDialog,
           ),
         ],
 
