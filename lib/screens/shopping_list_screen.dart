@@ -350,7 +350,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   @override
   Widget build(BuildContext context) {
     final itemAsync = ref.watch(itemProvider);
-    final isAdFree = ref.watch(purchaseProvider).maybeWhen(
+    const kHideAds = bool.fromEnvironment('HIDE_ADS');
+    final isAdFree = kHideAds || ref.watch(purchaseProvider).maybeWhen(
       data: (v) => v,
       orElse: () => false,
     );
