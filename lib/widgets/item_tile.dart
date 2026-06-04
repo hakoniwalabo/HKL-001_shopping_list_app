@@ -14,6 +14,8 @@ class ItemTile extends StatelessWidget {
 
   final Future<void> Function(bool?) onToggleCheck;
 
+  final VoidCallback? onMoveToTab;
+
   const ItemTile({
     super.key,
     required this.item,
@@ -22,6 +24,7 @@ class ItemTile extends StatelessWidget {
     required this.onDismissed,
     required this.onToggleCheck,
     this.reorderIndex,
+    this.onMoveToTab,
   });
 
   @override
@@ -52,6 +55,7 @@ class ItemTile extends StatelessWidget {
         leading: Checkbox(value: item.isChecked, onChanged: onToggleCheck),
 
         onTap: onTap,
+        onLongPress: onMoveToTab,
 
         title: Text(
           item.name,

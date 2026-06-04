@@ -306,6 +306,16 @@ SELECT id, name, price, isChecked, createdAt, sortOrder, quantity, memo, listId 
     });
   }
 
+  Future<void> updateItemListId(int itemId, int targetListId) async {
+    final db = await database;
+    await db.update(
+      'items',
+      {'listId': targetListId},
+      where: 'id = ?',
+      whereArgs: [itemId],
+    );
+  }
+
   Future<void> updateListName(int listId, String newName) async {
     final db = await database;
 

@@ -255,6 +255,41 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     }
   }
 
+  void _showMoveToTabDialog(Item item) {
+    final others = shoppingLists.where((l) => l.id != currentListId).toList();
+
+    if (others.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('移動先のリストがありません')),
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('移動先のリスト'),
+        children: others
+            .map(
+              (list) => SimpleDialogOption(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await ref
+                      .read(itemProvider.notifier)
+                      .moveItemToList(item.id!, list.id!);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('「${list.name}」に移動しました')),
+                  );
+                },
+                child: Text(list.name),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
   void _showDeleteCheckedDialog() {
     showDialog(
       context: context,
@@ -435,6 +470,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
                               numberFormat: numberFormat,
 
+                              onMoveToTab: (item) => () => _showMoveToTabDialog(item),
+
                               onTap: (item) => () {
                                 // ダイアログを閉じた後に履歴を再読み込み（§8.9）
                                 showAddItemDialog(
@@ -484,6 +521,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                               reorderable: false,
 
                               numberFormat: numberFormat,
+
+                              onMoveToTab: (item) => () => _showMoveToTabDialog(item),
 
                               onTap: (item) => () {
                                 showAddItemDialog(

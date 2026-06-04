@@ -19,6 +19,8 @@ class ListSection extends StatelessWidget {
 
   final VoidCallback Function(Item item) onTap;
 
+  final VoidCallback Function(Item item)? onMoveToTab;
+
   const ListSection({
     super.key,
     required this.title,
@@ -29,6 +31,7 @@ class ListSection extends StatelessWidget {
     required this.onDelete,
     required this.onTap,
     this.onReorder,
+    this.onMoveToTab,
   });
 
   @override
@@ -82,6 +85,10 @@ class ListSection extends StatelessWidget {
                   onDismissed: () async {
                     await onDelete(items[i]);
                   },
+
+                  onMoveToTab: onMoveToTab != null
+                      ? onMoveToTab!(items[i])
+                      : null,
                 ),
             ],
           )
@@ -103,6 +110,8 @@ class ListSection extends StatelessWidget {
               onDismissed: () async {
                 await onDelete(item);
               },
+
+              onMoveToTab: onMoveToTab != null ? onMoveToTab!(item) : null,
             ),
           ),
       ],

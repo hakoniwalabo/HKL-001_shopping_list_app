@@ -111,6 +111,13 @@ class ItemNotifier extends AsyncNotifier<List<Item>> {
     return checkedItems;
   }
 
+  Future<void> moveItemToList(int itemId, int targetListId) async {
+    await DatabaseHelper.instance.updateItemListId(itemId, targetListId);
+    final refreshed =
+        await DatabaseHelper.instance.getItemsByListId(currentListId);
+    state = AsyncData(refreshed);
+  }
+
   Future<void> restoreItemWithOrder(Item item) async {
     await DatabaseHelper.instance.insertItemWithId(
       item.copyWith(listId: currentListId),
