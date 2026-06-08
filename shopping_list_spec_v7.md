@@ -1,6 +1,6 @@
 # HKL-001 買い物リストアプリ 設計書
 
-**Rev 7.0　2026年改訂**
+**Rev 7.1　2026年改訂**
 
 ---
 
@@ -103,6 +103,7 @@ lib/
 | リスト名変更 | タブ長押しで名前編集 |
 | 履歴補完 | Autocomplete |
 | 合計表示 | 税込合計（タブ直下固定表示。未購入/購入済みを並列表示） |
+| 別リストへ移動 | 商品を長押しして移動先リストを選択 |
 | 広告表示 | AdMob バナー広告（画面下部固定・広告なし購入済みの場合は非表示） |
 | 広告なしアップグレード | 買い切り IAP（`remove_ads`）でアプリ内広告を永久非表示 |
 
@@ -535,17 +536,17 @@ if (!mounted) return;
 | 3-3 | リリース署名設定 | `upload-keystore.jks` + `key.properties` 設定済み | `build.gradle.kts` の signingConfig release ブロック設定済み | 🔴 必須 | ✅ 済 |
 | 3-4 | アイコン差し替え | `flutter_launcher_icons` 0.14.4 で生成済み | `assets/icon/icon.png` (1024px) → 全 mipmap + adaptive icon (anydpi-v26) | 🟡 推奨 | ✅ 済 |
 | 3-5 | minSdk / targetSdk 確認 | `minSdk = 21`（Android 5.0、Material3 最低要件） | `build.gradle.kts` に明示設定済み | ⬜ 任意 | ✅ 済 |
-| 3-6 | `pubspec.yaml` の `version` 更新 | `1.0.0+1` | versionName=1.0.0 / versionCode=1 | ⬜ 任意 | ✅ 済 |
-| 3-7 | AdMob 本番 ID 差し替え | テスト ID で実装済み | admob.google.com でアプリ登録 → App ID と Ad Unit ID を取得し `AndroidManifest.xml` / `ad_banner.dart` を更新 | 🔴 必須 | ⬜ 未 |
-| 3-8 | Google Play Console で IAP 商品登録 | 未登録 | 管理対象商品（non-consumable）を追加・商品ID: `remove_ads`・価格設定・有効化 | 🔴 必須 | ⬜ 未 |
+| 3-6 | `pubspec.yaml` の `version` 更新 | `1.0.0+3` | versionName=1.0.0 / versionCode=3 | ⬜ 任意 | ✅ 済 |
+| 3-7 | AdMob 本番 ID 差し替え | 本番 ID 設定済み | admob.google.com でアプリ登録済み → `AndroidManifest.xml` / `ad_banner.dart` 更新済み | 🔴 必須 | ✅ 済 |
+| 3-8 | Google Play Console で IAP 商品登録 | 登録済み | 管理対象商品（non-consumable）・商品ID: `remove_ads`・価格設定・有効化済み | 🔴 必須 | ✅ 済 |
 
 ### Phase 4 — ビルド・配布
 
 | # | 作業 | 内容 | 優先度 | 状態 |
 |---|------|------|--------|------|
 | 4-1 | `flutter analyze` 全体確認 | エラー0件を確認 | 🔴 必須 | ✅ 済 |
-| 4-2 | リリースビルド | `flutter build appbundle --release`（Play Store用）または `flutter build apk --release` | 🔴 必須 | ⬜ 未 |
-| 4-3 | Play Store 公開または APK 直配布 | Google Play Console 登録またはファイル共有 | 🔴 必須 | ⬜ 未 |
+| 4-2 | リリースビルド | `flutter build appbundle --release`（Play Store用）| 🔴 必須 | ✅ 済 |
+| 4-3 | Play Store 公開 | Google Play Console クローズドテスト提出中 | 🔴 必須 | 🔄 進行中 |
 
 ### 優先度まとめ
 
@@ -561,18 +562,22 @@ if (!mounted) return;
   Phase 3-3  署名設定（upload-keystore.jks）
   Phase 3-4  アイコン差し替え（flutter_launcher_icons + adaptive icon）
   Phase 3-5  minSdk = 21 明示
-  Phase 3-6  version 1.0.0+1
+  Phase 3-6  version 1.0.0+3（versionCode=3）
+  Phase 3-7  AdMob 本番 ID 差し替え済み
+  Phase 3-8  Google Play Console IAP 商品登録（remove_ads）済み
   Phase 4-1  flutter analyze（No issues found）
-  AdMob バナー広告実装（テスト ID）
+  Phase 4-2  リリースビルド完了（app-release.aab）
+  AdMob バナー広告実装（本番 ID）
   IAP 広告なし買い切り実装（remove_ads）
   price を税込単価に変更・税別表示削除
   taxRate カラム削除（DB version 5）
+  商品を別タブへ移動機能を追加
+  ヘルプ画面に「別リストへ移動」「入力履歴から補完」を追加
+  アイコン更新（2-4）
+  Google Play Console クローズドテスト提出中
 
-🔴 必須（残り・これがないとリリース不可）
-  Phase 3-7  AdMob 本番 ID 差し替え
-  Phase 3-8  Google Play Console IAP 商品登録（remove_ads）
-  Phase 4-2  リリースビルド
-  Phase 4-3  配布
+🔄 進行中
+  Phase 4-3  Google Play Console クローズドテスト審査中
 ```
 
 ---
@@ -643,11 +648,13 @@ if (!mounted) return;
 - Riverpod 状態管理（ItemNotifier / PurchaseNotifier）
 - Undo 復元対応（単件・複数件）
 - 複数リスト対応（最大10リスト）
+- 商品を別リストへ移動
 - 商品履歴補完（Autocomplete）
 - Material3 UI
 - 並び替え対応
 - 税込単価保存（price = 税込）・合計 = sum(price × quantity)
 - 購入済み管理
 - リスト削除時 CASCADE 処理
-- AdMob バナー広告（画面下部固定）
+- AdMob バナー広告（画面下部固定・本番ID）
 - 広告なし買い切りアップグレード（IAP: `remove_ads`）
+- ヘルプ画面（12項目）
