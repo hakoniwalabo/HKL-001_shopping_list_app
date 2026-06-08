@@ -57,6 +57,16 @@ class HelpDialog extends StatelessWidget {
               description: 'AppBar右上の「🗑」ボタン\n（最後のリストは削除できません）',
             ),
             _HelpItem(
+              icon: Icons.drive_file_move_outline,
+              label: '別リストへ移動',
+              description: '商品を長押しして移動先のリストを選択',
+            ),
+            _HelpItem(
+              icon: Icons.history,
+              label: '入力履歴から補完',
+              description: '商品名入力時に過去の入力履歴がサジェストされます',
+            ),
+            _HelpItem(
               icon: Icons.star_outline,
               label: '広告を非表示にする',
               description: 'AppBar右上の「★」ボタンから買い切り購入',
