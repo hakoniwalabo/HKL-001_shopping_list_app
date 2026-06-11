@@ -18,7 +18,7 @@
 | 7.1 | 2026年 | 商品を別リストへ移動機能・ヘルプ画面更新（12項目）・versionCode=3 |
 | 8.0 | 2026年 | 設計書ファイル名を v8 に変更・変更履歴セクション追加 |
 | 8.1 | 2026-06-09 | リスト複製機能追加・テキスト共有機能追加（share_plus）・AppBar をオプションメニュー（⋮）に整理・ヘルプ更新（14項目）・versionCode=4 |
-| 8.2 | 2026-06-11 | よく買うもの登録機能追加（favorites テーブル・DB v6）・AppBar に ♡ ボタン追加・リスト削除を ⋮ メニューへ移動・ヘルプ更新 |
+| 8.2 | 2026-06-12 | よく買うもの登録機能追加（favorites テーブル・DB v6）・AppBar に ♡ ボタン追加・リスト削除を ⋮ メニューへ移動・`Dismissible+ListTile+Checkbox` 採用・編集ダイアログ追加・全選択ボタン追加・スワイプ削除 Undo 追加・ヘルプ更新 |
 
 ---
 
@@ -468,16 +468,34 @@ void _showAddListDialog() {
 #### よく買うものダイアログ（`favorites_dialog.dart`）
 
 ```
-Dialog
+AlertDialog
  ├─ タイトル「よく買うもの」
- ├─ 商品一覧（CheckboxListTile）
- │   ├─ 商品名・金額・個数を表示
- │   └─ 長押しで削除
- ├─ 「直接登録」ボタン → add_item_dialog.dart（favorites モード）を開く
- ├─ 「履歴から登録」ボタン → history_select_dialog.dart を開く
- └─ 「リストに追加」ボタン（チェックした商品を現在のリストに一括追加）
-     └─ 0件選択時はボタン無効化
+ ├─ [全選択 / 全解除] トグルボタン（favorites 0件時は非表示）
+ ├─ 商品一覧
+ │   ├─ 0件時：「まだ登録されていません」
+ │   └─ 1件以上：
+ │       Dismissible（スワイプ左→削除）＋ Undo SnackBar
+ │        └─ ListTile
+ │            ├─ leading: Checkbox（タップでチェック切替）
+ │            ├─ title: 商品名
+ │            ├─ subtitle: ¥価格 × 個数（price=0 なら「数量: N」）
+ │            └─ onTap: _EditFavoriteDialog を開く
+ ├─ 「直接登録」TextButton → _AddFavoriteDialog（favorites_dialog.dart 内）
+ ├─ 「履歴から登録」TextButton → HistorySelectDialog
+ └─ 「リストに追加」FilledButton（0件選択時は disabled）
 ```
+
+#### 編集ダイアログ（`_EditFavoriteDialog`・favorites_dialog.dart 内）
+
+```
+AlertDialog タイトル「よく買うものを編集」
+ ├─ 商品名（必須・既存値で初期化）
+ ├─ 税込価格（0以上・既存値で初期化）
+ ├─ 個数（1以上・既存値で初期化）
+ └─ [キャンセル] [保存]
+```
+
+「保存」で `updateFavorite(id, name, price, quantity)` → 一覧をリロード（位置は変わらない）。
 
 #### 履歴選択ダイアログ（`history_select_dialog.dart`）
 
@@ -495,32 +513,57 @@ Dialog
 
 ```
 AppBar ♡ ボタンタップ
-→ favorites_dialog 表示
-→ 商品を複数チェック
+→ FavoritesDialog 表示
+→ 商品を複数チェック（または全選択ボタン）
 →「リストに追加」ボタンタップ
 → addFavoriteItemsToList(selectedIds, currentListId)
-→ items に一括 INSERT（sortOrder は MAX+1 から連番）
-→ ItemNotifier.reload()
-→ ダイアログ閉じる → SnackBar「X件追加しました」
+→ ItemNotifier.changeList(currentListId)
+→ ダイアログ閉じる（int count を返す）
+→ SnackBar「X件追加しました」
+```
+
+#### 処理フロー（編集）
+
+```
+アイテム行をタップ
+→ _EditFavoriteDialog 表示（既存値で初期化）
+→ 編集して「保存」
+→ updateFavorite(id, name, price, quantity)
+→ favorites 一覧をリロード（位置は変わらない）
+```
+
+#### 処理フロー（スワイプ削除・Undo）
+
+```
+アイテムを左スワイプ
+→ Dismissible が削除を検知
+→ _pendingUndoFavorite に削除データを保持
+→ deleteFavorite(id)
+→ favorites 一覧をリロード
+→ SnackBar「削除しました」＋「元に戻す」
+→（元に戻す タップ時）insertFavorite(name, price, quantity)
+→ favorites 一覧をリロード
 ```
 
 #### エラー・エッジケース
 
 | ケース | 対応 |
 |--------|------|
-| favorites が0件 | 「まだ登録されていません」の空状態表示 |
+| favorites が0件 | 「まだ登録されていません」の空状態表示・全選択ボタン非表示 |
 | 0件選択で「リストに追加」 | ボタンを無効化（disabled） |
 | 同名商品を重複登録 | 許容する（favorites はマスターなので複数持てる） |
-| 履歴が0件 | history_select_dialog で「履歴がありません」表示 |
+| 履歴が0件 | HistorySelectDialog で「履歴がありません」表示 |
+| Undo 後の位置 | sortOrder が MAX+1 になるため末尾に移動（許容） |
 
 #### DatabaseHelper 追加メソッド
 
 | メソッド | シグネチャ | 内容 |
 |---------|-----------|------|
-| getFavorites | `Future<List<Map>> getFavorites()` | 全件取得（sortOrder ASC） |
-| insertFavorite | `Future<void> insertFavorite(String name, int price, int quantity)` | 新規登録 |
-| deleteFavorite | `Future<void> deleteFavorite(int id)` | 削除 |
-| addFavoriteItemsToList | `Future<void> addFavoriteItemsToList(List<int> favoriteIds, int listId)` | 選択した favorites を items に一括 INSERT |
+| getFavorites | `Future<List<Map<String, dynamic>>> getFavorites()` | 全件取得（sortOrder ASC） |
+| insertFavorite | `Future<void> insertFavorite(String name, int price, int quantity)` | 新規登録（sortOrder は MAX+1） |
+| updateFavorite | `Future<void> updateFavorite(int id, String name, int price, int quantity)` | 既存レコードを UPDATE（位置保持） |
+| deleteFavorite | `Future<void> deleteFavorite(int id)` | 1件削除 |
+| addFavoriteItemsToList | `Future<void> addFavoriteItemsToList(List<int> favoriteIds, int listId)` | 選択した favorites を items に一括 INSERT（トランザクション） |
 
 ---
 
@@ -740,7 +783,7 @@ if (!mounted) return;
 
 | 優先度 | 機能 | 内容 |
 |--------|------|------|
-| 🔴 最高 | よく買うもの登録機能 | よく買う商品を登録・管理し、♡ ボタンから一括追加。設計書あり（`docs/superpowers/specs/2026-06-11-favorites-design.md`・`docs/superpowers/plans/2026-06-11-favorites-feature.md`） |
+| 🔴 最高 | よく買うもの登録機能 | よく買う商品を登録・管理し、♡ ボタンから一括追加。設計書 v2（`docs/superpowers/specs/2026-06-12-favorites-design-v2.md`）・旧実装プラン（`docs/superpowers/plans/2026-06-11-favorites-feature.md`） |
 | — | Firebase同期 | クラウド保存 |
 | — | カテゴリ機能 | 食品/日用品分類 |
 | — | 画像添付 | 商品写真 |
