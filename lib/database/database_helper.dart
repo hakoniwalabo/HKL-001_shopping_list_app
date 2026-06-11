@@ -21,7 +21,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -63,6 +63,17 @@ CREATE TABLE lists(
       'name': '買い物リスト',
       'createdAt': DateTime.now().millisecondsSinceEpoch,
     });
+
+    await db.execute('''
+CREATE TABLE favorites (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  price INTEGER NOT NULL DEFAULT 0,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  sortOrder INTEGER NOT NULL DEFAULT 0,
+  createdAt INTEGER NOT NULL
+)
+''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -127,6 +138,19 @@ SELECT id, name, price, isChecked, createdAt, sortOrder, quantity, memo, listId 
 ''');
       await db.execute('DROP TABLE items');
       await db.execute('ALTER TABLE items_new RENAME TO items');
+    }
+
+    if (oldVersion < 6) {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS favorites (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  price INTEGER NOT NULL DEFAULT 0,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  sortOrder INTEGER NOT NULL DEFAULT 0,
+  createdAt INTEGER NOT NULL
+)
+''');
     }
   }
 
@@ -325,5 +349,107 @@ SELECT id, name, price, isChecked, createdAt, sortOrder, quantity, memo, listId 
       where: 'id = ?',
       whereArgs: [listId],
     );
+  }
+
+  /// 指定リストを複製して新しいリストIDを返す
+  Future<int> duplicateList(int sourceListId, String newName) async {
+    final db = await database;
+
+    return await db.transaction((txn) async {
+      // 新しいリストを作成
+      final newListId = await txn.insert('lists', {
+        'name': newName,
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      // 元リストのアイテムを取得してコピー
+      final items = await txn.query(
+        'items',
+        where: 'listId = ?',
+        whereArgs: [sourceListId],
+        orderBy: 'sortOrder ASC',
+      );
+
+      for (final item in items) {
+        final copy = Map<String, dynamic>.from(item);
+        copy.remove('id');
+        copy['listId'] = newListId;
+        copy['isChecked'] = 0; // 複製時はすべて未チェックにリセット
+        await txn.insert('items', copy);
+      }
+
+      return newListId;
+    });
+  }
+
+  // -------------------------
+  // favorites CRUD
+  // -------------------------
+
+  Future<List<Map<String, dynamic>>> getFavorites() async {
+    final db = await database;
+    return await db.query('favorites', orderBy: 'sortOrder ASC');
+  }
+
+  Future<void> insertFavorite(String name, int price, int quantity) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT MAX(sortOrder) as maxOrder FROM favorites',
+    );
+    final maxOrder = (result.first['maxOrder'] as int?) ?? -1;
+    await db.insert('favorites', {
+      'name': name,
+      'price': price,
+      'quantity': quantity,
+      'sortOrder': maxOrder + 1,
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<void> updateFavorite(
+      int id, String name, int price, int quantity) async {
+    final db = await database;
+    await db.update(
+      'favorites',
+      {'name': name, 'price': price, 'quantity': quantity},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> deleteFavorite(int id) async {
+    final db = await database;
+    await db.delete('favorites', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> addFavoriteItemsToList(
+      List<int> favoriteIds, int listId) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final maxResult = await txn.rawQuery(
+        'SELECT MAX(sortOrder) as maxOrder FROM items WHERE listId = ?',
+        [listId],
+      );
+      int nextOrder = ((maxResult.first['maxOrder'] as int?) ?? -1) + 1;
+      for (final favId in favoriteIds) {
+        final rows = await txn.query(
+          'favorites',
+          where: 'id = ?',
+          whereArgs: [favId],
+        );
+        if (rows.isEmpty) continue;
+        final fav = rows.first;
+        await txn.insert('items', {
+          'name': fav['name'],
+          'price': fav['price'],
+          'quantity': fav['quantity'],
+          'isChecked': 0,
+          'memo': '',
+          'listId': listId,
+          'sortOrder': nextOrder++,
+          'createdAt': DateTime.now().millisecondsSinceEpoch,
+        });
+      }
+    });
   }
 }
