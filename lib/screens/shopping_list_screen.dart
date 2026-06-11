@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart' show Share;
 
 import '../database/database_helper.dart';
 import '../models/item.dart';
@@ -15,6 +16,7 @@ import '../widgets/empty_state_view.dart';
 import '../widgets/list_management_buttons.dart';
 import '../widgets/list_section.dart';
 import '../widgets/list_tab_bar.dart';
+import '../widgets/favorites_dialog.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/total_summary.dart';
 import '../widgets/upgrade_dialog.dart';
@@ -129,6 +131,97 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           }
         },
       ),
+    );
+  }
+
+  /// 現在のリストをテキスト化してOS共有シートで送る
+  Future<void> _shareCurrentList() async {
+    final currentList = shoppingLists.firstWhere(
+      (e) => e.id == currentListId,
+      orElse: () => ShoppingList(name: '買い物リスト'),
+    );
+
+    final items = await DatabaseHelper.instance.getItemsByListId(currentListId);
+
+    if (items.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('リストが空です')),
+      );
+      return;
+    }
+
+    final fmt = NumberFormat('#,###');
+    final buf = StringBuffer();
+    buf.writeln('【${currentList.name}】');
+    buf.writeln('─' * 20);
+
+    final unchecked = items.where((e) => !e.isChecked).toList();
+    final checked = items.where((e) => e.isChecked).toList();
+
+    for (final item in unchecked) {
+      final qty = item.quantity > 1 ? ' ×${item.quantity}' : '';
+      final price = item.price > 0 ? '  ¥${fmt.format(item.price * item.quantity)}' : '';
+      final memo = item.memo.isNotEmpty ? '  ※${item.memo}' : '';
+      buf.writeln('□ ${item.name}$qty$price$memo');
+    }
+
+    if (checked.isNotEmpty) {
+      buf.writeln('');
+      for (final item in checked) {
+        final qty = item.quantity > 1 ? ' ×${item.quantity}' : '';
+        final price = item.price > 0 ? '  ¥${fmt.format(item.price * item.quantity)}' : '';
+        buf.writeln('✓ ${item.name}$qty$price');
+      }
+    }
+
+    buf.writeln('─' * 20);
+
+    final uncheckedTotal = unchecked.fold(0, (s, e) => s + e.price * e.quantity);
+    final checkedTotal = checked.fold(0, (s, e) => s + e.price * e.quantity);
+    if (uncheckedTotal > 0) buf.writeln('未購入合計: ¥${fmt.format(uncheckedTotal)}');
+    if (checkedTotal > 0) buf.writeln('購入済合計: ¥${fmt.format(checkedTotal)}');
+
+    await Share.share(buf.toString());
+  }
+
+  /// 現在のリストを複製する
+  Future<void> _duplicateCurrentList() async {
+    if (shoppingLists.length >= 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('リストは最大10件まで作成できます')),
+      );
+      return;
+    }
+
+    final currentList = shoppingLists.firstWhere(
+      (e) => e.id == currentListId,
+      orElse: () => ShoppingList(name: '買い物リスト'),
+    );
+
+    final baseName = '${currentList.name}のコピー';
+    final existingNames = shoppingLists.map((e) => e.name).toSet();
+    String newName = baseName;
+    if (existingNames.contains(baseName)) {
+      int i = 2;
+      while (existingNames.contains('$baseName($i)')) { i++; }
+      newName = '$baseName($i)';
+    }
+    final newId = await DatabaseHelper.instance.duplicateList(currentListId, newName);
+
+    await loadLists();
+
+    if (!mounted) return;
+
+    final newIndex = shoppingLists.indexWhere((e) => e.id == newId);
+    if (newIndex != -1) {
+      _tabController?.animateTo(newIndex);
+      await changeList(newId);
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('「$newName」を作成しました')),
     );
   }
 
@@ -396,26 +489,84 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         title: const Text('買い物リスト'),
 
         actions: [
-          if (!isAdFree)
-            IconButton(
-              onPressed: () => showDialog<void>(
-                context: context,
-                builder: (_) => const UpgradeDialog(),
-              ),
-              icon: const Icon(Icons.star_outline),
-              tooltip: '広告を削除',
-            ),
           ListManagementButtons(
             onAddList: _showAddListDialog,
-            onDeleteList: _showDeleteListDialog,
+            onDuplicateList: _duplicateCurrentList,
           ),
           IconButton(
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (_) => const HelpDialog(),
-            ),
-            icon: const Icon(Icons.help_outline),
-            tooltip: '使い方',
+            icon: const Icon(Icons.favorite_border),
+            tooltip: 'よく買うものから追加',
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final count = await showDialog<int>(
+                context: context,
+                builder: (_) =>
+                    FavoritesDialog(currentListId: currentListId),
+              );
+              if (!mounted) return;
+              if (count != null && count > 0) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('$count件追加しました')),
+                );
+              }
+            },
+          ),
+          PopupMenuButton<_OptionItem>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: 'オプション',
+            onSelected: (item) {
+              switch (item) {
+                case _OptionItem.deleteList:
+                  _showDeleteListDialog();
+                case _OptionItem.share:
+                  _shareCurrentList();
+                case _OptionItem.upgrade:
+                  showDialog<void>(
+                    context: context,
+                    builder: (_) => const UpgradeDialog(),
+                  );
+                case _OptionItem.help:
+                  showDialog<void>(
+                    context: context,
+                    builder: (_) => const HelpDialog(),
+                  );
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: _OptionItem.deleteList,
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline),
+                  title: Text('リストを削除'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: _OptionItem.share,
+                child: ListTile(
+                  leading: Icon(Icons.share_outlined),
+                  title: Text('テキストで共有'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              if (!isAdFree)
+                const PopupMenuItem(
+                  value: _OptionItem.upgrade,
+                  child: ListTile(
+                    leading: Icon(Icons.star_outline),
+                    title: Text('広告を削除'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              const PopupMenuItem(
+                value: _OptionItem.help,
+                child: ListTile(
+                  leading: Icon(Icons.help_outline),
+                  title: Text('使い方'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
         ],
 
@@ -588,6 +739,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     );
   }
 }
+
+enum _OptionItem { share, upgrade, help, deleteList }
 
 class _SingleFieldDialog extends StatefulWidget {
   final String title;

@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 class ListManagementButtons extends StatelessWidget {
   final VoidCallback onAddList;
-  final VoidCallback onDeleteList;
+  final VoidCallback onDuplicateList;
 
   const ListManagementButtons({
     super.key,
     required this.onAddList,
-    required this.onDeleteList,
+    required this.onDuplicateList,
   });
 
   @override
@@ -21,9 +21,9 @@ class ListManagementButtons extends StatelessWidget {
           tooltip: 'リストを追加',
         ),
         IconButton(
-          onPressed: onDeleteList,
-          icon: const Icon(Icons.delete_outline),
-          tooltip: 'リストを削除',
+          onPressed: onDuplicateList,
+          icon: const Icon(Icons.copy_outlined),
+          tooltip: 'リストを複製',
         ),
       ],
     );
