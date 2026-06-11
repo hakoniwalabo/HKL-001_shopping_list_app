@@ -33,8 +33,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
     super.dispose();
   }
 
-  Future<void> _load({bool autoSelectNew = false}) async {
-    final oldIds = _favorites.map((f) => f['id'] as int).toSet();
+  Future<void> _load() async {
     final data = await DatabaseHelper.instance.getFavorites();
     if (!mounted) return;
     setState(() {
@@ -42,14 +41,6 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
       _selectedIds.removeWhere(
         (id) => !data.any((f) => f['id'] as int == id),
       );
-      if (autoSelectNew) {
-        for (final f in data) {
-          final id = f['id'] as int;
-          if (!oldIds.contains(id)) {
-            _selectedIds.add(id);
-          }
-        }
-      }
     });
   }
 
@@ -117,7 +108,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                             data['price'] as int,
                             data['quantity'] as int,
                           );
-                          await _load(autoSelectNew: true);
+                          await _load();
                         },
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.amber,
@@ -222,7 +213,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
           onPressed: () async {
             await showDialog<void>(
               context: context,
-              builder: (_) => _AddFavoriteDialog(onAdded: () => _load(autoSelectNew: true)),
+              builder: (_) => _AddFavoriteDialog(onAdded: _load),
             );
           },
           child: const Text('直接登録'),
@@ -236,7 +227,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                   for (final name in names) {
                     await DatabaseHelper.instance.insertFavorite(name, 0, 1);
                   }
-                  await _load(autoSelectNew: true);
+                  await _load();
                 },
               ),
             );
