@@ -24,7 +24,8 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool autoSelectNew = false}) async {
+    final oldIds = _favorites.map((f) => f['id'] as int).toSet();
     final data = await DatabaseHelper.instance.getFavorites();
     if (!mounted) return;
     setState(() {
@@ -32,6 +33,14 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
       _selectedIds.removeWhere(
         (id) => !data.any((f) => f['id'] as int == id),
       );
+      if (autoSelectNew) {
+        for (final f in data) {
+          final id = f['id'] as int;
+          if (!oldIds.contains(id)) {
+            _selectedIds.add(id);
+          }
+        }
+      }
     });
   }
 
@@ -135,7 +144,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                                   data['quantity'] as int,
                                 );
                                 _pendingUndoFavorite = null;
-                                await _load();
+                                await _load(autoSelectNew: true);
                               },
                             ),
                           ),
@@ -181,7 +190,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
           onPressed: () async {
             await showDialog<void>(
               context: context,
-              builder: (_) => _AddFavoriteDialog(onAdded: _load),
+              builder: (_) => _AddFavoriteDialog(onAdded: () => _load(autoSelectNew: true)),
             );
           },
           child: const Text('直接登録'),
@@ -195,7 +204,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                   for (final name in names) {
                     await DatabaseHelper.instance.insertFavorite(name, 0, 1);
                   }
-                  await _load();
+                  await _load(autoSelectNew: true);
                 },
               ),
             );
