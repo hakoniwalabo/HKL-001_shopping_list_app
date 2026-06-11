@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database_helper.dart';
@@ -17,11 +19,18 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
   List<Map<String, dynamic>> _favorites = [];
   final Set<int> _selectedIds = {};
   Map<String, dynamic>? _pendingUndoFavorite;
+  Timer? _undoTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _undoTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load({bool autoSelectNew = false}) async {
@@ -81,6 +90,44 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_pendingUndoFavorite != null)
+              Material(
+                color: Colors.grey[850],
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          '削除しました',
+                          style: TextStyle(color: Colors.white, fontSize: 14),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          _undoTimer?.cancel();
+                          final data = _pendingUndoFavorite!;
+                          setState(() => _pendingUndoFavorite = null);
+                          await DatabaseHelper.instance.insertFavorite(
+                            data['name'] as String,
+                            data['price'] as int,
+                            data['quantity'] as int,
+                          );
+                          await _load(autoSelectNew: true);
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.amber,
+                        ),
+                        child: const Text('元に戻す'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             if (_favorites.isNotEmpty)
               Align(
                 alignment: Alignment.centerLeft,
@@ -129,26 +176,11 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                         await DatabaseHelper.instance.deleteFavorite(id);
                         await _load();
                         if (!mounted) return;
-                        // ignore: use_build_context_synchronously
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('削除しました'),
-                            action: SnackBarAction(
-                              label: '元に戻す',
-                              onPressed: () async {
-                                final data = _pendingUndoFavorite;
-                                if (data == null) return;
-                                await DatabaseHelper.instance.insertFavorite(
-                                  data['name'] as String,
-                                  data['price'] as int,
-                                  data['quantity'] as int,
-                                );
-                                _pendingUndoFavorite = null;
-                                await _load(autoSelectNew: true);
-                              },
-                            ),
-                          ),
-                        );
+                        _undoTimer?.cancel();
+                        _undoTimer = Timer(const Duration(seconds: 5), () {
+                          if (!mounted) return;
+                          setState(() => _pendingUndoFavorite = null);
+                        });
                       },
                       child: ListTile(
                         leading: Checkbox(
