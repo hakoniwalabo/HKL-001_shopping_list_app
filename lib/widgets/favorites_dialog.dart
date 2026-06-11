@@ -263,6 +263,10 @@ class _AddFavoriteDialogState extends State<_AddFavoriteDialog> {
               controller: _priceCtrl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: '税込価格'),
+              onTap: () => _priceCtrl.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _priceCtrl.text.length,
+              ),
               validator: (v) {
                 final n = int.tryParse(v ?? '');
                 return (n == null || n < 0) ? '0以上の整数を入力してください' : null;
@@ -272,6 +276,10 @@ class _AddFavoriteDialogState extends State<_AddFavoriteDialog> {
               controller: _qtyCtrl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: '個数'),
+              onTap: () => _qtyCtrl.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _qtyCtrl.text.length,
+              ),
               validator: (v) {
                 final n = int.tryParse(v ?? '');
                 return (n == null || n < 1) ? '1以上の整数を入力してください' : null;
@@ -358,6 +366,10 @@ class _EditFavoriteDialogState extends State<_EditFavoriteDialog> {
               controller: _nameCtrl,
               autofocus: true,
               decoration: const InputDecoration(labelText: '商品名'),
+              onTap: () => _nameCtrl.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _nameCtrl.text.length,
+              ),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? '商品名を入力してください' : null,
             ),
@@ -365,6 +377,10 @@ class _EditFavoriteDialogState extends State<_EditFavoriteDialog> {
               controller: _priceCtrl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: '税込価格'),
+              onTap: () => _priceCtrl.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _priceCtrl.text.length,
+              ),
               validator: (v) {
                 final n = int.tryParse(v ?? '');
                 return (n == null || n < 0) ? '0以上の整数を入力してください' : null;
@@ -374,6 +390,10 @@ class _EditFavoriteDialogState extends State<_EditFavoriteDialog> {
               controller: _qtyCtrl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: '個数'),
+              onTap: () => _qtyCtrl.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _qtyCtrl.text.length,
+              ),
               validator: (v) {
                 final n = int.tryParse(v ?? '');
                 return (n == null || n < 1) ? '1以上の整数を入力してください' : null;
