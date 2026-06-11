@@ -54,7 +54,7 @@ class HelpDialog extends StatelessWidget {
             _HelpItem(
               icon: Icons.delete_outline,
               label: 'リストを削除',
-              description: 'AppBar右上の「🗑」ボタン\n（最後のリストは削除できません）',
+              description: 'AppBar右上の「⋮」→「リストを削除」\n（最後のリストは削除できません）',
             ),
             _HelpItem(
               icon: Icons.drive_file_move_outline,
@@ -67,9 +67,24 @@ class HelpDialog extends StatelessWidget {
               description: '商品名入力時に過去の入力履歴がサジェストされます',
             ),
             _HelpItem(
+              icon: Icons.copy_outlined,
+              label: 'リストを複製',
+              description: 'AppBar右上の「複製」ボタン\n全商品をコピーした新しいリストを作成します（チェックはリセット）',
+            ),
+            _HelpItem(
+              icon: Icons.favorite_border,
+              label: 'よく買うものから追加',
+              description: 'AppBar右上のハートボタンから定番商品を登録・管理できます。チェックして「リストに追加」を押すと一括追加されます。商品をタップすると価格・個数を編集できます',
+            ),
+            _HelpItem(
+              icon: Icons.share_outlined,
+              label: 'テキストで共有',
+              description: 'AppBar右上の「⋮」→「テキストで共有」\nリストの内容をテキストとして他のアプリに送れます',
+            ),
+            _HelpItem(
               icon: Icons.star_outline,
               label: '広告を非表示にする',
-              description: 'AppBar右上の「★」ボタンから買い切り購入',
+              description: 'AppBar右上の「⋮」→「広告を削除」から買い切り購入',
             ),
           ],
         ),
