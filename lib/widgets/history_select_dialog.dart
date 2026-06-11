@@ -36,25 +36,28 @@ class _HistorySelectDialogState extends State<HistorySelectDialog> {
         width: double.maxFinite,
         child: _allNames.isEmpty
             ? const Text('履歴がありません')
-            : ListView.builder(
-                shrinkWrap: true,
-                itemCount: _allNames.length,
-                itemBuilder: (_, i) {
-                  final name = _allNames[i];
-                  return CheckboxListTile(
-                    value: _selected.contains(name),
-                    title: Text(name),
-                    onChanged: (v) {
-                      setState(() {
-                        if (v == true) {
-                          _selected.add(name);
-                        } else {
-                          _selected.remove(name);
-                        }
-                      });
-                    },
-                  );
-                },
+            : LimitedBox(
+                maxHeight: 320,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _allNames.length,
+                  itemBuilder: (_, i) {
+                    final name = _allNames[i];
+                    return CheckboxListTile(
+                      value: _selected.contains(name),
+                      title: Text(name),
+                      onChanged: (v) {
+                        setState(() {
+                          if (v == true) {
+                            _selected.add(name);
+                          } else {
+                            _selected.remove(name);
+                          }
+                        });
+                      },
+                    );
+                  },
+                ),
               ),
       ),
       actions: [
