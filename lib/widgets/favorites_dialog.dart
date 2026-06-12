@@ -44,6 +44,16 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
     });
   }
 
+  Future<void> _onReorderItem(int oldIndex, int newIndex) async {
+    final list = [..._favorites];
+    final item = list.removeAt(oldIndex);
+    list.insert(newIndex, item);
+    setState(() => _favorites = list);
+    await DatabaseHelper.instance.reorderFavorites(
+      list.map((f) => f['id'] as int).toList(),
+    );
+  }
+
   Future<void> _addToList() async {
     final ids = _selectedIds.toList();
     await DatabaseHelper.instance.addFavoriteItemsToList(
@@ -136,11 +146,12 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                 child: Text('まだ登録されていません'),
               )
             else
-              LimitedBox(
-                maxHeight: 320,
-                child: ListView.builder(
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: ReorderableListView.builder(
                   shrinkWrap: true,
                   itemCount: _favorites.length,
+                  onReorderItem: _onReorderItem,
                   itemBuilder: (_, i) {
                     final fav = _favorites[i];
                     final id = fav['id'] as int;
@@ -200,6 +211,10 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                           );
                           await _load();
                         },
+                        trailing: ReorderableDragStartListener(
+                          index: i,
+                          child: const Icon(Icons.drag_handle),
+                        ),
                       ),
                     );
                   },
