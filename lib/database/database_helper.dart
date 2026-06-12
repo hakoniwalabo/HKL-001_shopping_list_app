@@ -422,6 +422,36 @@ CREATE TABLE IF NOT EXISTS favorites (
     await db.delete('favorites', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> reorderFavorites(List<int> orderedIds) async {
+    final db = await database;
+    final batch = db.batch();
+    for (int i = 0; i < orderedIds.length; i++) {
+      batch.update(
+        'favorites',
+        {'sortOrder': i},
+        where: 'id = ?',
+        whereArgs: [orderedIds[i]],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> restoreFavorite(
+    String name,
+    int price,
+    int quantity,
+    int sortOrder,
+  ) async {
+    final db = await database;
+    await db.insert('favorites', {
+      'name': name,
+      'price': price,
+      'quantity': quantity,
+      'sortOrder': sortOrder,
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
   Future<void> addFavoriteItemsToList(
       List<int> favoriteIds, int listId) async {
     final db = await database;
