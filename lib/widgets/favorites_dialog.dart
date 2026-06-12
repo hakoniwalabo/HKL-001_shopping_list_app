@@ -49,9 +49,13 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
     final item = list.removeAt(oldIndex);
     list.insert(newIndex, item);
     setState(() => _favorites = list);
-    await DatabaseHelper.instance.reorderFavorites(
-      list.map((f) => f['id'] as int).toList(),
-    );
+    try {
+      await DatabaseHelper.instance.reorderFavorites(
+        list.map((f) => f['id'] as int).toList(),
+      );
+    } catch (_) {
+      await _load();
+    }
   }
 
   Future<void> _addToList() async {
