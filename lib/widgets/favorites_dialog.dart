@@ -113,10 +113,11 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                           _undoTimer?.cancel();
                           final data = _pendingUndoFavorite!;
                           setState(() => _pendingUndoFavorite = null);
-                          await DatabaseHelper.instance.insertFavorite(
+                          await DatabaseHelper.instance.restoreFavorite(
                             data['name'] as String,
                             data['price'] as int,
                             data['quantity'] as int,
+                            data['sortOrder'] as int,
                           );
                           await _load();
                         },
