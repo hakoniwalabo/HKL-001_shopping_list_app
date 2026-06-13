@@ -74,6 +74,9 @@ class BackupService {
     } catch (_) {
       throw const FormatException('invalid_json');
     }
+    if (data['version'] is! int) {
+      throw const FormatException('invalid_json');
+    }
     if (data['version'] != 1) {
       throw const FormatException('unsupported_version');
     }

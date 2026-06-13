@@ -39,13 +39,24 @@ void main() {
       );
     });
 
-    test('version が 1 以外で unsupported_version を投げる', () {
+    test('version が 1 以外の整数で unsupported_version を投げる', () {
       const json =
           '{"version":2,"exportedAt":1234,"lists":[],"items":[],"favorites":[]}';
       expect(
         () => BackupService.parseAndValidate(json),
         throwsA(predicate<FormatException>(
           (e) => e.message == 'unsupported_version',
+        )),
+      );
+    });
+
+    test('version が文字列の場合は invalid_json を投げる', () {
+      const json =
+          '{"version":"1","exportedAt":1234,"lists":[],"items":[],"favorites":[]}';
+      expect(
+        () => BackupService.parseAndValidate(json),
+        throwsA(predicate<FormatException>(
+          (e) => e.message == 'invalid_json',
         )),
       );
     });

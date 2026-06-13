@@ -522,12 +522,17 @@ CREATE TABLE IF NOT EXISTS favorites (
     final existingNames =
         existingListRows.map((r) => r['name'] as String).toSet();
 
+    if (existingNames.length + incomingLists.length > 10) {
+      throw const FormatException('list_limit_exceeded');
+    }
+
     final listIdMap = <int, int>{};
+    int insertedFavCount = 0;
 
     await db.transaction((txn) async {
       // lists INSERT
       for (final list in incomingLists) {
-        final oldId = list['id'] as int;
+        final oldId = (list['id'] as num).toInt();
         final resolvedName =
             resolveListName(list['name'] as String, existingNames);
         existingNames.add(resolvedName);
@@ -551,7 +556,10 @@ CREATE TABLE IF NOT EXISTS favorites (
         await txn.insert('items', copy);
       }
 
-      // favorites INSERT（sortOrder を MAX+1 から採番）
+      // favorites INSERT（sortOrder を MAX+1 から採番・name 重複はスキップ）
+      final existingFavRows = await txn.query('favorites', columns: ['name']);
+      final existingFavNames =
+          existingFavRows.map((r) => r['name'] as String).toSet();
       final maxResult = await txn.rawQuery(
         'SELECT MAX(sortOrder) as maxOrder FROM favorites',
       );
@@ -559,17 +567,21 @@ CREATE TABLE IF NOT EXISTS favorites (
           ((maxResult.first['maxOrder'] as int?) ?? -1) + 1;
 
       for (final fav in incomingFavorites) {
+        final favName = fav['name'] as String;
+        if (existingFavNames.contains(favName)) continue;
+        existingFavNames.add(favName);
         final copy = Map<String, dynamic>.from(fav)
           ..remove('id')
           ..['sortOrder'] = nextOrder++;
         await txn.insert('favorites', copy);
+        insertedFavCount++;
       }
     });
 
     return ImportResult(
       listCount: incomingLists.length,
       itemCount: incomingItems.length,
-      favoriteCount: incomingFavorites.length,
+      favoriteCount: insertedFavCount,
     );
   }
 

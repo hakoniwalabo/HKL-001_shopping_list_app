@@ -240,9 +240,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            e.message == 'unsupported_version'
-                ? '対応していないバックアップ形式です'
-                : '読み込めないファイルです',
+            switch (e.message) {
+              'unsupported_version' => '対応していないバックアップ形式です',
+              'list_limit_exceeded' => 'リストが上限（10件）に達しているため読み込めません',
+              _ => '読み込めないファイルです',
+            },
           ),
         ),
       );
