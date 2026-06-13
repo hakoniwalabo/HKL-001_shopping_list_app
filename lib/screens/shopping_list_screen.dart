@@ -20,6 +20,7 @@ import '../widgets/favorites_dialog.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/total_summary.dart';
 import '../widgets/upgrade_dialog.dart';
+import '../services/backup_service.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -183,6 +184,72 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     if (checkedTotal > 0) buf.writeln('購入済合計: ¥${fmt.format(checkedTotal)}');
 
     await Share.share(buf.toString());
+  }
+
+  Future<void> _exportBackup() async {
+    try {
+      await BackupService.export();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('バックアップの作成に失敗しました')),
+      );
+    }
+  }
+
+  Future<void> _importBackup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('バックアップデータを読み込む'),
+        content: const Text(
+          '既存のデータは残したまま、バックアップのデータが追加されます。よろしいですか？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('読み込む'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await BackupService.import();
+      if (result == null) return;
+      if (!mounted) return;
+      await loadLists();
+      if (!mounted) return;
+      await ref.read(itemProvider.notifier).changeList(currentListId);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '${result.listCount}リスト・${result.itemCount}件の商品・'
+            '${result.favoriteCount}件のよく買うものを追加しました',
+          ),
+        ),
+      );
+    } on FormatException catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e.message == 'unsupported_version'
+                ? '対応していないバックアップ形式です'
+                : '読み込めないファイルです',
+          ),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('読み込みに失敗しました')),
+      );
+    }
   }
 
   /// 現在のリストを複製する
@@ -530,6 +597,10 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                     context: context,
                     builder: (_) => const HelpDialog(),
                   );
+                case _OptionItem.backup:
+                  _exportBackup();
+                case _OptionItem.importBackup:
+                  _importBackup();
               }
             },
             itemBuilder: (_) => [
@@ -546,6 +617,22 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                 child: ListTile(
                   leading: Icon(Icons.share_outlined),
                   title: Text('テキストで共有'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: _OptionItem.backup,
+                child: ListTile(
+                  leading: Icon(Icons.backup_outlined),
+                  title: Text('バックアップ'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: _OptionItem.importBackup,
+                child: ListTile(
+                  leading: Icon(Icons.restore_outlined),
+                  title: Text('バックアップデータを読み込む'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -740,7 +827,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   }
 }
 
-enum _OptionItem { share, upgrade, help, deleteList }
+enum _OptionItem { share, upgrade, help, deleteList, backup, importBackup }
 
 class _SingleFieldDialog extends StatefulWidget {
   final String title;
