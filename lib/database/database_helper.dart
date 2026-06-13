@@ -3,6 +3,18 @@ import 'package:path/path.dart';
 import '../models/item.dart';
 import '../models/shopping_list.dart';
 
+class ImportResult {
+  final int listCount;
+  final int itemCount;
+  final int favoriteCount;
+
+  const ImportResult({
+    required this.listCount,
+    required this.itemCount,
+    required this.favoriteCount,
+  });
+}
+
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
@@ -483,5 +495,87 @@ CREATE TABLE IF NOT EXISTS favorites (
         });
       }
     });
+  }
+
+  // -------------------------
+  // バックアップ・インポート
+  // -------------------------
+
+  /// バックアップJSONデータをマージINSERTする
+  Future<ImportResult> importData(Map<String, dynamic> data) async {
+    final db = await database;
+
+    final incomingLists =
+        List<Map<String, dynamic>>.from(data['lists'] as List);
+    final incomingItems =
+        List<Map<String, dynamic>>.from(data['items'] as List);
+    final incomingFavorites =
+        List<Map<String, dynamic>>.from(data['favorites'] as List);
+
+    // 既存リスト名を先に取得（transaction外）
+    final existingListRows = await db.query('lists', columns: ['name']);
+    final existingNames =
+        existingListRows.map((r) => r['name'] as String).toSet();
+
+    final listIdMap = <int, int>{};
+
+    await db.transaction((txn) async {
+      // lists INSERT
+      for (final list in incomingLists) {
+        final oldId = list['id'] as int;
+        final resolvedName =
+            resolveListName(list['name'] as String, existingNames);
+        existingNames.add(resolvedName);
+
+        final newId = await txn.insert('lists', {
+          'name': resolvedName,
+          'createdAt': list['createdAt'],
+        });
+        listIdMap[oldId] = newId;
+      }
+
+      // items INSERT（listId を新IDに差し替え）
+      for (final item in incomingItems) {
+        final oldListId = item['listId'] as int;
+        final newListId = listIdMap[oldListId];
+        if (newListId == null) continue;
+
+        final copy = Map<String, dynamic>.from(item)
+          ..remove('id')
+          ..['listId'] = newListId;
+        await txn.insert('items', copy);
+      }
+
+      // favorites INSERT（sortOrder を MAX+1 から採番）
+      final maxResult = await txn.rawQuery(
+        'SELECT MAX(sortOrder) as maxOrder FROM favorites',
+      );
+      int nextOrder =
+          ((maxResult.first['maxOrder'] as int?) ?? -1) + 1;
+
+      for (final fav in incomingFavorites) {
+        final copy = Map<String, dynamic>.from(fav)
+          ..remove('id')
+          ..['sortOrder'] = nextOrder++;
+        await txn.insert('favorites', copy);
+      }
+    });
+
+    return ImportResult(
+      listCount: incomingLists.length,
+      itemCount: incomingItems.length,
+      favoriteCount: incomingFavorites.length,
+    );
+  }
+
+  /// リスト名の衝突を解決して一意な名前を返す。
+  /// 衝突する場合は末尾に(2)(3)...を付与する。
+  static String resolveListName(String name, Set<String> existingNames) {
+    if (!existingNames.contains(name)) return name;
+    int i = 2;
+    while (existingNames.contains('$name($i)')) {
+      i++;
+    }
+    return '$name($i)';
   }
 }
