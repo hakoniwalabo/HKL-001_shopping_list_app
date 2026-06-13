@@ -21,9 +21,10 @@ class BackupService {
 
     final favorites = await helper.getFavorites();
 
+    final now = DateTime.now();
     final data = {
       'version': 1,
-      'exportedAt': DateTime.now().millisecondsSinceEpoch,
+      'exportedAt': now.millisecondsSinceEpoch,
       'lists': lists.map((l) => l.toMap()).toList(),
       'items': allItems,
       'favorites': favorites,
@@ -31,17 +32,20 @@ class BackupService {
 
     final json = const JsonEncoder.withIndent('  ').convert(data);
     final dir = await getTemporaryDirectory();
-    final now = DateTime.now();
     final fileName = 'shopping_backup_'
         '${now.year}${_pad(now.month)}${_pad(now.day)}'
         '_${_pad(now.hour)}${_pad(now.minute)}${_pad(now.second)}.json';
     final file = File('${dir.path}/$fileName');
     await file.writeAsString(json);
 
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      subject: '買い物リスト バックアップ',
-    );
+    try {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: '買い物リスト バックアップ',
+      );
+    } finally {
+      if (await file.exists()) await file.delete();
+    }
   }
 
   /// ファイルを選択してマージインポート。キャンセル時は null を返す。
