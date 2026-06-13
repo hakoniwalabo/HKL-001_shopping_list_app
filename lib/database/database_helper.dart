@@ -503,10 +503,11 @@ CREATE TABLE IF NOT EXISTS favorites (
 
   /// バックアップJSONデータをマージINSERTする
   Future<ImportResult> importData(Map<String, dynamic> data) async {
-    assert(
-      data['lists'] is List && data['items'] is List && data['favorites'] is List,
-      'importData は BackupService.parseAndValidate() で検証済みのデータのみ受け取る',
-    );
+    if (data['lists'] is! List ||
+        data['items'] is! List ||
+        data['favorites'] is! List) {
+      throw ArgumentError('importData: 不正なデータ構造');
+    }
     final db = await database;
 
     final incomingLists =
