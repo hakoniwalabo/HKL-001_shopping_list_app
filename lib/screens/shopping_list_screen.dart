@@ -187,11 +187,12 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   }
 
   Future<void> _exportBackup() async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await BackupService.export();
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('バックアップの作成に失敗しました')),
       );
     }
@@ -222,8 +223,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     final messenger = ScaffoldMessenger.of(context);
     try {
       final result = await BackupService.import();
-      if (result == null) return;
       if (!mounted) return;
+      if (result == null) return;
       await loadLists();
       if (!mounted) return;
       await ref.read(itemProvider.notifier).changeList(currentListId);
