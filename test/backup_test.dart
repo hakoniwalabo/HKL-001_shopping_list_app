@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:shopping_list_app/database/database_helper.dart';
+import 'package:shopping_list_app/services/backup_service.dart';
 
 void main() {
   group('DatabaseHelper.resolveListName', () {
@@ -20,6 +21,43 @@ void main() {
 
     test('空のセットでは名前をそのまま返す', () {
       expect(DatabaseHelper.resolveListName('買い物リスト', {}), '買い物リスト');
+    });
+  });
+
+  group('BackupService.parseAndValidate', () {
+    test('正常なJSONをパースして返す', () {
+      const json =
+          '{"version":1,"exportedAt":1234,"lists":[],"items":[],"favorites":[]}';
+      final result = BackupService.parseAndValidate(json);
+      expect(result['version'], 1);
+    });
+
+    test('不正なJSONでFormatExceptionを投げる', () {
+      expect(
+        () => BackupService.parseAndValidate('not json'),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('version が 1 以外で unsupported_version を投げる', () {
+      const json =
+          '{"version":2,"exportedAt":1234,"lists":[],"items":[],"favorites":[]}';
+      expect(
+        () => BackupService.parseAndValidate(json),
+        throwsA(predicate<FormatException>(
+          (e) => e.message == 'unsupported_version',
+        )),
+      );
+    });
+
+    test('必須キーが欠けると invalid_json を投げる', () {
+      const json = '{"version":1,"exportedAt":1234,"lists":[]}';
+      expect(
+        () => BackupService.parseAndValidate(json),
+        throwsA(predicate<FormatException>(
+          (e) => e.message == 'invalid_json',
+        )),
+      );
     });
   });
 }
