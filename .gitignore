@@ -51,3 +51,6 @@ app.*.map.json
 
 # 標準テスターペルソナ・テスト結果 - DO NOT COMMIT
 /docs/testers/
+
+# コード解説ドキュメント - DO NOT COMMIT
+/docs/code_explanation_beginner.md
