@@ -82,6 +82,16 @@ class HelpDialog extends StatelessWidget {
               description: 'AppBar右上の「⋮」→「テキストで共有」\nリストの内容をテキストとして他のアプリに送れます',
             ),
             _HelpItem(
+              icon: Icons.backup_outlined,
+              label: 'バックアップ',
+              description: 'AppBar右上の「⋮」→「バックアップ」\nデータをJSONファイルとして書き出し、メール・クラウドで保存できます',
+            ),
+            _HelpItem(
+              icon: Icons.restore_outlined,
+              label: 'バックアップデータを読み込む',
+              description: 'AppBar右上の「⋮」→「バックアップデータを読み込む」\nバックアップファイルを選択して、既存データに追加読み込みします',
+            ),
+            _HelpItem(
               icon: Icons.star_outline,
               label: '広告を非表示にする',
               description: 'AppBar右上の「⋮」→「広告を削除」から買い切り購入',
