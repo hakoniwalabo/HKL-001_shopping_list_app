@@ -54,3 +54,6 @@ app.*.map.json
 
 # コード解説ドキュメント - DO NOT COMMIT
 /docs/code_explanation_beginner.md
+
+# Claude Code ローカル設定 - DO NOT COMMIT
+.claude/settings.local.json
