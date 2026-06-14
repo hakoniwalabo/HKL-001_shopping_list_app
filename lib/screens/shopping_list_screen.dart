@@ -806,7 +806,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
         loading: () => const Center(child: CircularProgressIndicator()),
 
-        error: (error, stack) => Center(child: Text('Error: $error')),
+        error: (error, stack) => const Center(child: Text('データの読み込みに失敗しました')),
           ),
           ),
           // バナー広告（広告なし購入済みの場合は非表示）

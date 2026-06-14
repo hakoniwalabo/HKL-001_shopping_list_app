@@ -71,7 +71,7 @@ class PurchaseNotifier extends AsyncNotifier<bool> {
       await InAppPurchase.instance.buyNonConsumable(purchaseParam: param);
       return null; // 結果はストリームで受け取る
     } catch (e) {
-      return e.toString();
+      return '購入処理に失敗しました。しばらくしてから再試行してください。';
     }
   }
 
