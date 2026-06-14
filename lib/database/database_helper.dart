@@ -546,7 +546,7 @@ CREATE TABLE IF NOT EXISTS favorites (
 
       // items INSERT（listId を新IDに差し替え）
       for (final item in incomingItems) {
-        final oldListId = item['listId'] as int;
+        final oldListId = (item['listId'] as num).toInt();
         final newListId = listIdMap[oldListId];
         if (newListId == null) continue;
 
