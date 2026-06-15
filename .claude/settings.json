@@ -1,8 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cd C:\\Users\\gothf\\develop\\HKL-001_shopping_list_app; flutter test *)",
-      "Bash(cd C:\\Users\\gothf\\develop\\HKL-001_shopping_list_app; git add *; git commit *; git push *)"
+      "Bash(git *)",
+      "Bash(flutter *)"
     ]
   }
 }
