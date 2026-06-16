@@ -186,14 +186,64 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     await Share.share(buf.toString());
   }
 
+  /// 現在のリストを未購入のみで「読み込み用ファイル」として共有する
+  Future<void> _shareListFile() async {
+    final currentList = shoppingLists.firstWhere(
+      (e) => e.id == currentListId,
+      orElse: () => ShoppingList(name: '買い物リスト'),
+    );
+    final messenger = ScaffoldMessenger.of(context);
+    final shared =
+        await BackupService.shareList(currentListId, currentList.name);
+    if (!mounted) return;
+    if (!shared) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('共有できる商品がありません')),
+      );
+    }
+  }
+
   Future<void> _exportBackup() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('バックアップ'),
+        content: const Text('保存先を選んでください'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('cancel'),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('share'),
+            child: const Text('共有'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop('device'),
+            child: const Text('端末に保存'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || choice == 'cancel' || !mounted) return;
+
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await BackupService.export();
+      if (choice == 'share') {
+        await BackupService.export();
+      } else {
+        final saved = await BackupService.saveToDevice();
+        if (!mounted) return;
+        if (saved) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('端末に保存しました')),
+          );
+        }
+      }
     } catch (_) {
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('バックアップの作成に失敗しました')),
+        const SnackBar(content: Text('保存に失敗しました')),
       );
     }
   }
@@ -204,7 +254,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       builder: (_) => AlertDialog(
         title: const Text('バックアップデータを読み込む'),
         content: const Text(
-          '既存のデータは残したまま、バックアップのデータが追加されます。よろしいですか？',
+          '既存のデータは残したまま、ファイルのデータが追加されます。\n'
+          '共有されたリストもここから読み込めます。よろしいですか？',
         ),
         actions: [
           TextButton(
@@ -590,6 +641,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                   _showDeleteListDialog();
                 case _OptionItem.share:
                   _shareCurrentList();
+                case _OptionItem.shareListFile:
+                  _shareListFile();
                 case _OptionItem.upgrade:
                   showDialog<void>(
                     context: context,
@@ -624,6 +677,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                 ),
               ),
               const PopupMenuItem(
+                value: _OptionItem.shareListFile,
+                child: ListTile(
+                  leading: Icon(Icons.send_outlined),
+                  title: Text('リストを共有（読み込み用）'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
                 value: _OptionItem.backup,
                 child: ListTile(
                   leading: Icon(Icons.backup_outlined),
@@ -635,7 +696,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                 value: _OptionItem.importBackup,
                 child: ListTile(
                   leading: Icon(Icons.restore_outlined),
-                  title: Text('バックアップデータを読み込む'),
+                  title: Text('読み込む（バックアップ／共有リスト）'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -825,7 +886,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   }
 }
 
-enum _OptionItem { share, upgrade, help, deleteList, backup, importBackup }
+enum _OptionItem { share, shareListFile, upgrade, help, deleteList, backup, importBackup }
 
 class _SingleFieldDialog extends StatefulWidget {
   final String title;
