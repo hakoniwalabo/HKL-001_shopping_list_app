@@ -136,9 +136,10 @@ class BackupService {
   /// ファイルを選択してマージインポート。キャンセル時は null を返す。
   /// FormatException: 'invalid_json' または 'unsupported_version' を投げる可能性あり
   static Future<ImportResult?> import() async {
+    // 共有経由で拡張子が書き換わったファイルも選べるよう拡張子を限定しない。
+    // 中身は parseAndValidate で検証するため安全性は変わらない。
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
+      type: FileType.any,
     );
 
     if (result == null || result.files.isEmpty) return null;
