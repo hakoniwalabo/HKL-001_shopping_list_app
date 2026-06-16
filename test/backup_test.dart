@@ -96,4 +96,20 @@ void main() {
       expect(BackupService.sanitizeFileName(long).length, 50);
     });
   });
+
+  group('BackupService.buildExportMap', () {
+    test('version と各セクションを格納する', () {
+      final map = BackupService.buildExportMap(
+        lists: [{'id': 1, 'name': 'A', 'createdAt': 100}],
+        items: [{'id': 1, 'name': '牛乳', 'listId': 1}],
+        favorites: [],
+        exportedAt: 12345,
+      );
+      expect(map['version'], 1);
+      expect(map['exportedAt'], 12345);
+      expect((map['lists'] as List).length, 1);
+      expect((map['items'] as List).length, 1);
+      expect((map['favorites'] as List).isEmpty, true);
+    });
+  });
 }

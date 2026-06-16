@@ -17,6 +17,22 @@ class BackupService {
     return base.length > 50 ? base.substring(0, 50) : base;
   }
 
+  /// version:1 エクスポート Map を構築する（純粋関数）。
+  static Map<String, dynamic> buildExportMap({
+    required List<Map<String, dynamic>> lists,
+    required List<Map<String, dynamic>> items,
+    required List<Map<String, dynamic>> favorites,
+    required int exportedAt,
+  }) {
+    return {
+      'version': 1,
+      'exportedAt': exportedAt,
+      'lists': lists,
+      'items': items,
+      'favorites': favorites,
+    };
+  }
+
   /// 全データを JSON ファイルとして共有シートに渡す
   static Future<void> export() async {
     final helper = DatabaseHelper.instance;
