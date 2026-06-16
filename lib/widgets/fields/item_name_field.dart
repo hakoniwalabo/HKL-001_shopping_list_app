@@ -4,10 +4,14 @@ class ItemNameField extends StatefulWidget {
   final TextEditingController controller;
   final List<String> historyNames;
 
+  /// 外部からフォーカスを制御したい場合に渡す。未指定なら内部で生成する。
+  final FocusNode? focusNode;
+
   const ItemNameField({
     super.key,
     required this.controller,
     required this.historyNames,
+    this.focusNode,
   });
 
   @override
@@ -15,19 +19,24 @@ class ItemNameField extends StatefulWidget {
 }
 
 class _ItemNameFieldState extends State<ItemNameField> {
-  final _focusNode = FocusNode();
+  FocusNode? _internalFocusNode;
+  FocusNode get _focusNode => widget.focusNode ?? _internalFocusNode!;
   List<String> _suggestions = [];
 
   @override
   void initState() {
     super.initState();
+    if (widget.focusNode == null) {
+      _internalFocusNode = FocusNode();
+    }
     _focusNode.addListener(_onFocusChange);
   }
 
   @override
   void dispose() {
     _focusNode.removeListener(_onFocusChange);
-    _focusNode.dispose();
+    // 内部生成したノードのみ破棄する（外部注入ノードは呼び出し側が管理）
+    _internalFocusNode?.dispose();
     super.dispose();
   }
 

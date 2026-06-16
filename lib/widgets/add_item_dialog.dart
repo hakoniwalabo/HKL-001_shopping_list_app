@@ -48,6 +48,10 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
   late final TextEditingController _quantityCtrl;
   late final TextEditingController _memoCtrl;
 
+  // 連続追加用: 名前欄へ再フォーカスするためのノードと追加件数
+  final FocusNode _nameFocus = FocusNode();
+  int _addedCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +70,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
     _priceCtrl.dispose();
     _quantityCtrl.dispose();
     _memoCtrl.dispose();
+    _nameFocus.dispose();
     super.dispose();
   }
 
@@ -102,6 +107,15 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
       );
       await ref.read(itemProvider.notifier).addItem(newItem);
       await DatabaseHelper.instance.upsertHistory(name);
+
+      if (!mounted) return;
+      // 連続入力: ダイアログを閉じず、入力欄をクリアして名前欄へ再フォーカス
+      setState(() => _addedCount++);
+      _nameCtrl.clear();
+      _priceCtrl.text = '0';
+      _quantityCtrl.text = '1';
+      _nameFocus.requestFocus();
+      return;
     }
 
     if (!mounted) return;
@@ -118,11 +132,24 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
           key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // 連続追加のフィードバック（追加モードのみ）
+              if (!isEdit && _addedCount > 0) ...[
+                Text(
+                  '$_addedCount件追加しました',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               // 追加・編集 共通
               ItemNameField(
                 controller: _nameCtrl,
                 historyNames: widget.historyNames,
+                focusNode: _nameFocus,
               ),
               const SizedBox(height: 12),
               PriceField(controller: _priceCtrl),
@@ -140,7 +167,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('キャンセル'),
+          child: Text(isEdit ? 'キャンセル' : '閉じる'),
         ),
         FilledButton(
           onPressed: _submit,

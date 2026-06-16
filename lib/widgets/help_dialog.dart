@@ -14,7 +14,8 @@ class HelpDialog extends StatelessWidget {
             _HelpItem(
               icon: Icons.add_circle_outline,
               label: '商品を追加',
-              description: '右下の「追加」ボタンをタップ',
+              description: '右下の「追加」ボタンをタップ\n'
+                  '「追加」を押すと続けて入力できます（まとめて追加できます）。終わったら「閉じる」',
             ),
             _HelpItem(
               icon: Icons.edit_outlined,

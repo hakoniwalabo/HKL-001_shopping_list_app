@@ -666,10 +666,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           onRenameTab: _showRenameListDialog,
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: itemAsync.when(
+      body: itemAsync.when(
         data: (items) {
           final unchecked = items.where((e) => !e.isChecked).toList();
           final checked = items.where((e) => e.isChecked).toList();
@@ -807,12 +804,10 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         loading: () => const Center(child: CircularProgressIndicator()),
 
         error: (error, stack) => const Center(child: Text('データの読み込みに失敗しました')),
-          ),
-          ),
-          // バナー広告（広告なし購入済みの場合は非表示）
-          if (!isAdFree) const AdBannerWidget(),
-        ],
       ),
+      // バナー広告（広告なし購入済みの場合は非表示）。
+      // bottomNavigationBar に置くことで Scaffold が FAB を広告の上へ持ち上げる
+      bottomNavigationBar: isAdFree ? null : const AdBannerWidget(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await showAddItemDialog(
