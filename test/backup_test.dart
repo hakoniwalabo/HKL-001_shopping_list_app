@@ -71,4 +71,29 @@ void main() {
       );
     });
   });
+
+  group('BackupService.sanitizeFileName', () {
+    test('通常の名前はそのまま返す', () {
+      expect(BackupService.sanitizeFileName('週末の買い物'), '週末の買い物');
+    });
+
+    test('ファイル名禁止文字を _ に置換する', () {
+      expect(BackupService.sanitizeFileName('a/b:c*d?e"f<g>h|i\\j'),
+          'a_b_c_d_e_f_g_h_i_j');
+    });
+
+    test('前後の空白とドットを除去する', () {
+      expect(BackupService.sanitizeFileName('  .買い物.  '), '買い物');
+    });
+
+    test('空または禁止文字のみの場合は list を返す', () {
+      expect(BackupService.sanitizeFileName('   '), 'list');
+      expect(BackupService.sanitizeFileName('///'), 'list');
+    });
+
+    test('50文字を超える場合は切り詰める', () {
+      final long = 'あ' * 60;
+      expect(BackupService.sanitizeFileName(long).length, 50);
+    });
+  });
 }

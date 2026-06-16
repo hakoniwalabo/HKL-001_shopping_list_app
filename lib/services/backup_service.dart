@@ -8,6 +8,15 @@ import 'package:share_plus/share_plus.dart';
 import '../database/database_helper.dart';
 
 class BackupService {
+  /// リスト名をファイル名として安全な文字列へ変換する。
+  /// 禁止文字を _ に置換し、前後の空白・ドットを除去。空になる場合は 'list'。
+  static String sanitizeFileName(String name) {
+    final replaced = name.replaceAll(RegExp(r'[\/\\:*?"<>|\x00-\x1F]'), '_');
+    final trimmed = replaced.replaceAll(RegExp(r'^[\s._]+|[\s._]+$'), '');
+    final base = trimmed.isEmpty ? 'list' : trimmed;
+    return base.length > 50 ? base.substring(0, 50) : base;
+  }
+
   /// 全データを JSON ファイルとして共有シートに渡す
   static Future<void> export() async {
     final helper = DatabaseHelper.instance;
