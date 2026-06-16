@@ -33,8 +33,8 @@ class BackupService {
     };
   }
 
-  /// 全データを JSON ファイルとして共有シートに渡す
-  static Future<void> export() async {
+  /// 全データを version:1 JSON 文字列に変換する。
+  static Future<String> _buildFullBackupJson() async {
     final helper = DatabaseHelper.instance;
     final lists = await helper.getLists();
 
@@ -43,24 +43,30 @@ class BackupService {
       final items = await helper.getItemsByListId(list.id!);
       allItems.addAll(items.map((i) => i.toMap()));
     }
-
     final favorites = await helper.getFavorites();
 
-    final now = DateTime.now();
-    final data = {
-      'version': 1,
-      'exportedAt': now.millisecondsSinceEpoch,
-      'lists': lists.map((l) => l.toMap()).toList(),
-      'items': allItems,
-      'favorites': favorites,
-    };
+    final map = buildExportMap(
+      lists: lists.map((l) => l.toMap()).toList(),
+      items: allItems,
+      favorites: favorites,
+      exportedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    return const JsonEncoder.withIndent('  ').convert(map);
+  }
 
-    final json = const JsonEncoder.withIndent('  ').convert(data);
-    final dir = await getTemporaryDirectory();
-    final fileName = 'shopping_backup_'
+  /// バックアップ用のファイル名を生成する。
+  static String _backupFileName() {
+    final now = DateTime.now();
+    return 'shopping_backup_'
         '${now.year}${_pad(now.month)}${_pad(now.day)}'
         '_${_pad(now.hour)}${_pad(now.minute)}${_pad(now.second)}.json';
-    final file = File('${dir.path}/$fileName');
+  }
+
+  /// 全データを JSON ファイルとして共有シートに渡す
+  static Future<void> export() async {
+    final json = await _buildFullBackupJson();
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/${_backupFileName()}');
     await file.writeAsString(json);
 
     try {
