@@ -94,8 +94,8 @@ class HelpDialog extends StatelessWidget {
             ),
             _HelpItem(
               icon: Icons.restore_outlined,
-              label: 'バックアップデータを読み込む',
-              description: 'AppBar右上の「⋮」→「バックアップデータを読み込む」\nバックアップファイルを選択して、既存データに追加読み込みします',
+              label: '読み込む（バックアップ／共有リスト）',
+              description: 'AppBar右上の「⋮」→「読み込む（バックアップ／共有リスト）」\nバックアップや共有されたリストのファイルを選択して、既存データに追加読み込みします',
             ),
             _HelpItem(
               icon: Icons.star_outline,

@@ -254,7 +254,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       builder: (_) => AlertDialog(
         title: const Text('バックアップデータを読み込む'),
         content: const Text(
-          '既存のデータは残したまま、バックアップのデータが追加されます。よろしいですか？',
+          '既存のデータは残したまま、ファイルのデータが追加されます。\n'
+          '共有されたリストもここから読み込めます。よろしいですか？',
         ),
         actions: [
           TextButton(
@@ -695,7 +696,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                 value: _OptionItem.importBackup,
                 child: ListTile(
                   leading: Icon(Icons.restore_outlined),
-                  title: Text('バックアップデータを読み込む'),
+                  title: Text('読み込む（バックアップ／共有リスト）'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
