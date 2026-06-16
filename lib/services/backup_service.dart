@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -77,6 +78,21 @@ class BackupService {
     } finally {
       if (await file.exists()) await file.delete();
     }
+  }
+
+  /// 全データを端末に保存する（file_picker saveFile / Android は SAF）。
+  /// 保存した場合 true、キャンセルは false を返す。
+  static Future<bool> saveToDevice() async {
+    final json = await _buildFullBackupJson();
+    final bytes = Uint8List.fromList(utf8.encode(json));
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: 'バックアップの保存先を選択',
+      fileName: _backupFileName(),
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      bytes: bytes,
+    );
+    return path != null;
   }
 
   /// ファイルを選択してマージインポート。キャンセル時は null を返す。
