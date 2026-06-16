@@ -95,6 +95,44 @@ class BackupService {
     return path != null;
   }
 
+  /// 指定リスト1件を未購入アイテムのみで共有シートに渡す。
+  /// 共有できる商品が無い場合は false を返す。
+  static Future<bool> shareList(int listId, String listName) async {
+    final helper = DatabaseHelper.instance;
+    final lists = await helper.getLists();
+    final target = lists.where((l) => l.id == listId).toList();
+    if (target.isEmpty) return false;
+
+    final items = await helper.getItemsByListId(listId);
+    final unchecked = items.where((i) => !i.isChecked).toList();
+    if (unchecked.isEmpty) return false;
+
+    final map = buildExportMap(
+      lists: [target.first.toMap()],
+      items: unchecked.map((i) => i.toMap()).toList(),
+      favorites: const [],
+      exportedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    final json = const JsonEncoder.withIndent('  ').convert(map);
+
+    final now = DateTime.now();
+    final fileName = 'shoppinglist_${sanitizeFileName(listName)}_'
+        '${now.year}${_pad(now.month)}${_pad(now.day)}.json';
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
+    await file.writeAsString(json);
+
+    try {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'リスト「$listName」を共有',
+      );
+    } finally {
+      if (await file.exists()) await file.delete();
+    }
+    return true;
+  }
+
   /// ファイルを選択してマージインポート。キャンセル時は null を返す。
   /// FormatException: 'invalid_json' または 'unsupported_version' を投げる可能性あり
   static Future<ImportResult?> import() async {
