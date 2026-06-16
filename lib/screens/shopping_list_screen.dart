@@ -187,13 +187,46 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   }
 
   Future<void> _exportBackup() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('バックアップ'),
+        content: const Text('保存先を選んでください'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('cancel'),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('share'),
+            child: const Text('共有'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop('device'),
+            child: const Text('端末に保存'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || choice == 'cancel' || !mounted) return;
+
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await BackupService.export();
+      if (choice == 'share') {
+        await BackupService.export();
+      } else {
+        final saved = await BackupService.saveToDevice();
+        if (!mounted) return;
+        if (saved) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('端末に保存しました')),
+          );
+        }
+      }
     } catch (_) {
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('バックアップの作成に失敗しました')),
+        const SnackBar(content: Text('保存に失敗しました')),
       );
     }
   }
