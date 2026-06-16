@@ -49,11 +49,15 @@ class _ItemNameFieldState extends State<ItemNameField> {
   }
 
   void _updateSuggestions(String text) {
-    final filtered = text.isEmpty
-        ? widget.historyNames
-        : widget.historyNames
-            .where((n) => n.toLowerCase().contains(text.toLowerCase()))
-            .toList();
+    // 空欄（フォーカス取得直後・連続追加でのクリア直後）では候補を出さない。
+    // 入力文字がある場合のみ履歴を絞り込んで表示する。
+    if (text.isEmpty) {
+      setState(() => _suggestions = []);
+      return;
+    }
+    final filtered = widget.historyNames
+        .where((n) => n.toLowerCase().contains(text.toLowerCase()))
+        .toList();
     setState(() => _suggestions = filtered.take(8).toList());
   }
 

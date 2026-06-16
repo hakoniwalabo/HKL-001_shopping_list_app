@@ -25,6 +25,9 @@ Future<void> showAddItemDialog({
   );
 }
 
+/// 「閉じる」確認ダイアログの選択肢
+enum _CloseAction { cancel, discard, add }
+
 class _AddItemDialogContent extends ConsumerStatefulWidget {
   final int currentListId;
   final List<String> historyNames;
@@ -74,7 +77,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit({bool closeAfter = false}) async {
     if (!_formKey.currentState!.validate()) return;
 
     final name = _nameCtrl.text.trim();
@@ -109,6 +112,11 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
       await DatabaseHelper.instance.upsertHistory(name);
 
       if (!mounted) return;
+      // 「追加して閉じる」経由の場合はそのままダイアログを閉じる
+      if (closeAfter) {
+        Navigator.of(context).pop();
+        return;
+      }
       // 連続入力: ダイアログを閉じず、入力欄をクリアして名前欄へ再フォーカス
       setState(() => _addedCount++);
       _nameCtrl.clear();
@@ -118,6 +126,51 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
       return;
     }
 
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  /// 追加モードで「閉じる」を押したときの処理。
+  /// 名前欄に未追加のテキストが残っている場合は確認してから閉じる。
+  Future<void> _handleClose() async {
+    if (_nameCtrl.text.trim().isEmpty) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    final action = await showDialog<_CloseAction>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('未追加の入力があります'),
+        content: Text('「${_nameCtrl.text.trim()}」はまだ追加されていません。'),
+        actionsOverflowDirection: VerticalDirection.down,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(_CloseAction.cancel),
+            child: const Text('入力に戻る'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(_CloseAction.discard),
+            child: const Text('破棄して閉じる'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(_CloseAction.add),
+            child: const Text('追加して閉じる'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || action == null || action == _CloseAction.cancel) return;
+
+    if (action == _CloseAction.add) {
+      // バリデーションを通れば追加してダイアログを閉じる。
+      // 通らなければ閉じず、入力画面でエラーを表示する。
+      await _submit(closeAfter: true);
+      return;
+    }
+
+    // 破棄して閉じる
     if (!mounted) return;
     Navigator.of(context).pop();
   }
@@ -166,7 +219,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: isEdit ? () => Navigator.of(context).pop() : _handleClose,
           child: Text(isEdit ? 'キャンセル' : '閉じる'),
         ),
         FilledButton(
