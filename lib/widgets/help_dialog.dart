@@ -90,7 +90,7 @@ class HelpDialog extends StatelessWidget {
             _HelpItem(
               icon: Icons.backup_outlined,
               label: 'バックアップ',
-              description: 'AppBar右上の「⋮」→「バックアップ」\nデータをJSONファイルとして書き出します。「共有」でメール・クラウドへ送るか「端末に保存」でダウンロードフォルダに保存できます',
+              description: 'AppBar右上の「⋮」→「バックアップ」\nデータをJSONファイルとして書き出します。「共有」でメール・クラウドへ送るか「端末に保存」で保存先を選んで保存できます',
             ),
             _HelpItem(
               icon: Icons.restore_outlined,
