@@ -186,6 +186,23 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     await Share.share(buf.toString());
   }
 
+  /// 現在のリストを未購入のみで「読み込み用ファイル」として共有する
+  Future<void> _shareListFile() async {
+    final currentList = shoppingLists.firstWhere(
+      (e) => e.id == currentListId,
+      orElse: () => ShoppingList(name: '買い物リスト'),
+    );
+    final messenger = ScaffoldMessenger.of(context);
+    final shared =
+        await BackupService.shareList(currentListId, currentList.name);
+    if (!mounted) return;
+    if (!shared) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('共有できる商品がありません')),
+      );
+    }
+  }
+
   Future<void> _exportBackup() async {
     final choice = await showDialog<String>(
       context: context,
@@ -623,6 +640,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                   _showDeleteListDialog();
                 case _OptionItem.share:
                   _shareCurrentList();
+                case _OptionItem.shareListFile:
+                  _shareListFile();
                 case _OptionItem.upgrade:
                   showDialog<void>(
                     context: context,
@@ -653,6 +672,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                 child: ListTile(
                   leading: Icon(Icons.share_outlined),
                   title: Text('テキストで共有'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: _OptionItem.shareListFile,
+                child: ListTile(
+                  leading: Icon(Icons.send_outlined),
+                  title: Text('リストを共有（読み込み用）'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -858,7 +885,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   }
 }
 
-enum _OptionItem { share, upgrade, help, deleteList, backup, importBackup }
+enum _OptionItem { share, shareListFile, upgrade, help, deleteList, backup, importBackup }
 
 class _SingleFieldDialog extends StatefulWidget {
   final String title;

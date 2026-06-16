@@ -83,6 +83,11 @@ class HelpDialog extends StatelessWidget {
               description: 'AppBar右上の「⋮」→「テキストで共有」\nリストの内容をテキストとして他のアプリに送れます',
             ),
             _HelpItem(
+              icon: Icons.send_outlined,
+              label: 'リストを共有（読み込み用）',
+              description: 'AppBar右上の「⋮」→「リストを共有（読み込み用）」\n未購入商品をJSONファイルとして送信。受け取った側は「読み込む」から取り込めます',
+            ),
+            _HelpItem(
               icon: Icons.backup_outlined,
               label: 'バックアップ',
               description: 'AppBar右上の「⋮」→「バックアップ」\nデータをJSONファイルとして書き出します。「共有」でメール・クラウドへ送るか「端末に保存」でダウンロードフォルダに保存できます',
