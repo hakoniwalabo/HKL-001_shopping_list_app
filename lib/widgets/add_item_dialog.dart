@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/database_helper.dart';
+import '../models/category.dart';
 import '../models/item.dart';
+import '../providers/category_provider.dart';
 import '../providers/item_provider.dart';
 import 'fields/item_name_field.dart';
 import 'fields/price_field.dart';
@@ -25,7 +27,6 @@ Future<void> showAddItemDialog({
   );
 }
 
-/// 「閉じる」確認ダイアログの選択肢
 enum _CloseAction { cancel, discard, add }
 
 class _AddItemDialogContent extends ConsumerStatefulWidget {
@@ -51,9 +52,9 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
   late final TextEditingController _quantityCtrl;
   late final TextEditingController _memoCtrl;
 
-  // 連続追加用: 名前欄へ再フォーカスするためのノードと追加件数
   final FocusNode _nameFocus = FocusNode();
   int _addedCount = 0;
+  int? _selectedCategoryId;
 
   @override
   void initState() {
@@ -65,6 +66,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
       text: item?.quantity.toString() ?? '1',
     );
     _memoCtrl = TextEditingController(text: item?.memo ?? '');
+    _selectedCategoryId = item?.categoryId;
   }
 
   @override
@@ -86,38 +88,31 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
 
     final item = widget.item;
     if (item != null) {
-      // 編集時: メモも反映
       final memo = _memoCtrl.text.trim();
-      final updatedItem = item.copyWith(
-        name: name,
-        price: price,
-        quantity: quantity,
-        memo: memo,
-      );
+      final updatedItem = item
+          .copyWith(name: name, price: price, quantity: quantity, memo: memo)
+          .copyWithNullableCategory(categoryId: _selectedCategoryId);
       await ref.read(itemProvider.notifier).updateItem(updatedItem);
-      // 名前が変わった場合のみ履歴を更新（設計書 §8.9）
       if (name != item.name) {
         await DatabaseHelper.instance.upsertHistory(name);
       }
     } else {
-      // 追加時: 税込価格をそのまま保存・memo=空固定
       final newItem = Item(
         name: name,
         price: price,
         quantity: quantity,
         memo: '',
         listId: widget.currentListId,
+        categoryId: _selectedCategoryId,
       );
       await ref.read(itemProvider.notifier).addItem(newItem);
       await DatabaseHelper.instance.upsertHistory(name);
 
       if (!mounted) return;
-      // 「追加して閉じる」経由の場合はそのままダイアログを閉じる
       if (closeAfter) {
         Navigator.of(context).pop();
         return;
       }
-      // 連続入力: ダイアログを閉じず、入力欄をクリアして名前欄へ再フォーカス
       setState(() => _addedCount++);
       _nameCtrl.clear();
       _priceCtrl.text = '0';
@@ -130,8 +125,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
     Navigator.of(context).pop();
   }
 
-  /// 追加モードで「閉じる」を押したときの処理。
-  /// 名前欄に未追加のテキストが残っている場合は確認してから閉じる。
   Future<void> _handleClose() async {
     if (_nameCtrl.text.trim().isEmpty) {
       Navigator.of(context).pop();
@@ -162,22 +155,47 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
     );
 
     if (!mounted || action == null || action == _CloseAction.cancel) return;
-
     if (action == _CloseAction.add) {
-      // バリデーションを通れば追加してダイアログを閉じる。
-      // 通らなければ閉じず、入力画面でエラーを表示する。
       await _submit(closeAfter: true);
       return;
     }
-
-    // 破棄して閉じる
     if (!mounted) return;
     Navigator.of(context).pop();
+  }
+
+  Future<void> _showNewCategoryDialog(List<Category> categories) async {
+    String newName = '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('カテゴリを追加'),
+        content: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'カテゴリ名'),
+          onChanged: (v) => newName = v.trim(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('追加'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || newName.isEmpty || !mounted) return;
+    final id = await ref.read(categoryProvider.notifier).addCategory(newName);
+    setState(() => _selectedCategoryId = id);
   }
 
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.item != null;
+    final categories = ref.watch(categoryProvider).value ?? <Category>[];
+
     return AlertDialog(
       title: Text(isEdit ? '商品編集' : '商品追加'),
       content: SingleChildScrollView(
@@ -187,7 +205,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 連続追加のフィードバック（追加モードのみ）
               if (!isEdit && _addedCount > 0) ...[
                 Text(
                   '$_addedCount件追加しました',
@@ -198,7 +215,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
                 ),
                 const SizedBox(height: 8),
               ],
-              // 追加・編集 共通
               ItemNameField(
                 controller: _nameCtrl,
                 historyNames: widget.historyNames,
@@ -208,11 +224,45 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
               PriceField(controller: _priceCtrl),
               const SizedBox(height: 12),
               QuantityField(controller: _quantityCtrl),
-              // 編集時のみ: メモを表示
               if (isEdit) ...[
                 const SizedBox(height: 12),
                 MemoField(controller: _memoCtrl),
               ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int?>(
+                      decoration: const InputDecoration(
+                        labelText: 'カテゴリ（任意）',
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      initialValue: _selectedCategoryId,
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('なし'),
+                        ),
+                        ...categories.map(
+                          (c) => DropdownMenuItem<int?>(
+                            value: c.id,
+                            child: Text(c.name),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => _selectedCategoryId = v),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: '新規カテゴリ',
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: () => _showNewCategoryDialog(categories),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
