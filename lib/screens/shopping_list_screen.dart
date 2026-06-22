@@ -6,8 +6,10 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart' show Share;
 
 import '../database/database_helper.dart';
+import '../models/category.dart';
 import '../models/item.dart';
 import '../models/shopping_list.dart';
+import '../providers/category_provider.dart';
 import '../providers/item_provider.dart';
 import '../providers/purchase_provider.dart';
 import '../widgets/ad_banner.dart';
@@ -591,6 +593,113 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     });
   }
 
+  List<Widget> _buildCategorySections({
+    required List<Item> unchecked,
+    required List<Category> categories,
+    required NumberFormat numberFormat,
+  }) {
+    VoidCallback onTapFor(Item item) => () {
+          showAddItemDialog(
+            context: context,
+            currentListId: currentListId,
+            historyNames: historyNames,
+            item: item,
+          ).then((_) {
+            if (mounted) loadHistory();
+          });
+        };
+
+    Future<void> onToggleCheck(Item item) async {
+      await ref.read(itemProvider.notifier).toggleCheck(item.id!);
+    }
+
+    Future<void> onDelete(Item item) async {
+      final deleted =
+          await ref.read(itemProvider.notifier).deleteItemById(item.id!);
+      if (deleted != null) {
+        _pendingUndoItems = [deleted];
+      }
+      if (!mounted) return;
+      _showUndoSnackBar(message: '削除しました');
+    }
+
+    VoidCallback onMoveToTabFor(Item item) =>
+        () => _showMoveToTabDialog(item);
+
+    if (categories.isEmpty) {
+      return [
+        ListSection(
+          title: '未購入',
+          items: unchecked,
+          reorderable: true,
+          numberFormat: numberFormat,
+          onReorder: (oldIndex, newIndex) async {
+            await ref
+                .read(itemProvider.notifier)
+                .reorderUncheckedItems(oldIndex, newIndex);
+          },
+          onToggleCheck: onToggleCheck,
+          onDelete: onDelete,
+          onTap: onTapFor,
+          onMoveToTab: (item) => onMoveToTabFor(item),
+        ),
+      ];
+    }
+
+    final result = <Widget>[];
+
+    for (final cat in categories) {
+      final catItems =
+          unchecked.where((i) => i.categoryId == cat.id).toList();
+      if (catItems.isEmpty) continue;
+      result.add(
+        ListSection(
+          title: cat.name,
+          items: catItems,
+          reorderable: true,
+          numberFormat: numberFormat,
+          onReorder: (oldIndex, newIndex) async {
+            final globalOld = unchecked.indexOf(catItems[oldIndex]);
+            final globalNew = unchecked.indexOf(catItems[newIndex]);
+            await ref
+                .read(itemProvider.notifier)
+                .reorderUncheckedItems(globalOld, globalNew);
+          },
+          onToggleCheck: onToggleCheck,
+          onDelete: onDelete,
+          onTap: onTapFor,
+          onMoveToTab: (item) => onMoveToTabFor(item),
+        ),
+      );
+    }
+
+    final noCategory =
+        unchecked.where((i) => i.categoryId == null).toList();
+    if (noCategory.isNotEmpty) {
+      result.add(
+        ListSection(
+          title: 'カテゴリなし',
+          items: noCategory,
+          reorderable: true,
+          numberFormat: numberFormat,
+          onReorder: (oldIndex, newIndex) async {
+            final globalOld = unchecked.indexOf(noCategory[oldIndex]);
+            final globalNew = unchecked.indexOf(noCategory[newIndex]);
+            await ref
+                .read(itemProvider.notifier)
+                .reorderUncheckedItems(globalOld, globalNew);
+          },
+          onToggleCheck: onToggleCheck,
+          onDelete: onDelete,
+          onTap: onTapFor,
+          onMoveToTab: (item) => onMoveToTabFor(item),
+        ),
+      );
+    }
+
+    return result;
+  }
+
   @override
   void dispose() {
     _tabController?.dispose();
@@ -743,6 +852,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         data: (items) {
           final unchecked = items.where((e) => !e.isChecked).toList();
           final checked = items.where((e) => e.isChecked).toList();
+          final categoriesAsync = ref.watch(categoryProvider);
+          final categories = categoriesAsync.value ?? <Category>[];
 
           return Column(
             children: [
@@ -772,54 +883,10 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                                   ),
                                 ),
                               ),
-                            ListSection(
-                              title: '未購入',
-
-                              items: unchecked,
-
-                              reorderable: true,
-
+                            ..._buildCategorySections(
+                              unchecked: unchecked,
+                              categories: categories,
                               numberFormat: numberFormat,
-
-                              onMoveToTab: (item) => () => _showMoveToTabDialog(item),
-
-                              onTap: (item) => () {
-                                // ダイアログを閉じた後に履歴を再読み込み（§8.9）
-                                showAddItemDialog(
-                                  context: context,
-                                  currentListId: currentListId,
-                                  historyNames: historyNames,
-                                  item: item,
-                                ).then((_) {
-                                  if (mounted) loadHistory();
-                                });
-                              },
-
-                              onToggleCheck: (item) async {
-                                await ref
-                                    .read(itemProvider.notifier)
-                                    .toggleCheck(item.id!);
-                              },
-
-                              onDelete: (item) async {
-                                final deleted = await ref
-                                    .read(itemProvider.notifier)
-                                    .deleteItemById(item.id!);
-
-                                if (deleted != null) {
-                                  _pendingUndoItems = [deleted];
-                                }
-
-                                if (!mounted) return;
-
-                                _showUndoSnackBar(message: '削除しました');
-                              },
-
-                              onReorder: (oldIndex, newIndex) async {
-                                await ref
-                                    .read(itemProvider.notifier)
-                                    .reorderUncheckedItems(oldIndex, newIndex);
-                              },
                             ),
 
                             const Divider(thickness: 1.5),
