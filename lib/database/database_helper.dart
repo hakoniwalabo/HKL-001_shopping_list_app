@@ -33,7 +33,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -50,7 +50,8 @@ CREATE TABLE items(
   sortOrder INTEGER,
   quantity INTEGER,
   memo TEXT,
-  listId INTEGER
+  listId INTEGER,
+  categoryId INTEGER
 )
 ''');
 
@@ -82,6 +83,16 @@ CREATE TABLE favorites (
   name TEXT NOT NULL,
   price INTEGER NOT NULL DEFAULT 0,
   quantity INTEGER NOT NULL DEFAULT 1,
+  sortOrder INTEGER NOT NULL DEFAULT 0,
+  createdAt INTEGER NOT NULL,
+  categoryId INTEGER
+)
+''');
+
+    await db.execute('''
+CREATE TABLE categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
   sortOrder INTEGER NOT NULL DEFAULT 0,
   createdAt INTEGER NOT NULL
 )
@@ -163,6 +174,25 @@ CREATE TABLE IF NOT EXISTS favorites (
   createdAt INTEGER NOT NULL
 )
 ''');
+    }
+
+    if (oldVersion < 7) {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  sortOrder INTEGER NOT NULL DEFAULT 0,
+  createdAt INTEGER NOT NULL
+)
+''');
+      for (final sql in [
+        'ALTER TABLE items ADD COLUMN categoryId INTEGER',
+        'ALTER TABLE favorites ADD COLUMN categoryId INTEGER',
+      ]) {
+        try {
+          await db.execute(sql);
+        } catch (_) {}
+      }
     }
   }
 
@@ -403,7 +433,12 @@ CREATE TABLE IF NOT EXISTS favorites (
     return await db.query('favorites', orderBy: 'sortOrder ASC');
   }
 
-  Future<void> insertFavorite(String name, int price, int quantity) async {
+  Future<void> insertFavorite(
+    String name,
+    int price,
+    int quantity, {
+    int? categoryId,
+  }) async {
     final db = await database;
     final result = await db.rawQuery(
       'SELECT MAX(sortOrder) as maxOrder FROM favorites',
@@ -415,15 +450,26 @@ CREATE TABLE IF NOT EXISTS favorites (
       'quantity': quantity,
       'sortOrder': maxOrder + 1,
       'createdAt': DateTime.now().millisecondsSinceEpoch,
+      'categoryId': categoryId,
     });
   }
 
   Future<void> updateFavorite(
-      int id, String name, int price, int quantity) async {
+    int id,
+    String name,
+    int price,
+    int quantity, {
+    int? categoryId,
+  }) async {
     final db = await database;
     await db.update(
       'favorites',
-      {'name': name, 'price': price, 'quantity': quantity},
+      {
+        'name': name,
+        'price': price,
+        'quantity': quantity,
+        'categoryId': categoryId,
+      },
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -447,6 +493,43 @@ CREATE TABLE IF NOT EXISTS favorites (
         );
       }
       await batch.commit(noResult: true);
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getCategories() async {
+    final db = await database;
+    return await db.query('categories', orderBy: 'sortOrder ASC');
+  }
+
+  Future<int> insertCategory(String name) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT MAX(sortOrder) as maxOrder FROM categories',
+    );
+    final maxOrder = (result.first['maxOrder'] as int?) ?? -1;
+    return await db.insert('categories', {
+      'name': name,
+      'sortOrder': maxOrder + 1,
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<void> deleteCategory(int id) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.update(
+        'items',
+        {'categoryId': null},
+        where: 'categoryId = ?',
+        whereArgs: [id],
+      );
+      await txn.update(
+        'favorites',
+        {'categoryId': null},
+        where: 'categoryId = ?',
+        whereArgs: [id],
+      );
+      await txn.delete('categories', where: 'id = ?', whereArgs: [id]);
     });
   }
 
