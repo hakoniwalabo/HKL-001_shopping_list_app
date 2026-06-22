@@ -98,6 +98,12 @@ class HelpDialog extends StatelessWidget {
               description: 'AppBar右上の「⋮」→「読み込む（バックアップ／共有リスト）」\nバックアップや共有されたリストのファイルを選択して、既存データに追加読み込みします',
             ),
             _HelpItem(
+              icon: Icons.label_outline,
+              label: 'カテゴリを管理',
+              description: 'AppBar右上の「⋮」→「カテゴリを管理」\n'
+                  'カテゴリを作成・削除できます。商品の追加・編集画面でカテゴリを設定すると、リストがカテゴリ別に整理されます',
+            ),
+            _HelpItem(
               icon: Icons.star_outline,
               label: '広告を非表示にする',
               description: 'AppBar右上の「⋮」→「広告を削除」から買い切り購入',
