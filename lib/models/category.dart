@@ -19,9 +19,9 @@ class Category {
       };
 
   factory Category.fromMap(Map<String, dynamic> map) => Category(
-        id: map['id'] as int?,
+        id: map['id'] != null ? (map['id'] as num).toInt() : null,
         name: map['name'] as String,
-        sortOrder: map['sortOrder'] as int,
-        createdAt: map['createdAt'] as int,
+        sortOrder: (map['sortOrder'] as num).toInt(),
+        createdAt: (map['createdAt'] as num).toInt(),
       );
 }

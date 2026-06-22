@@ -31,5 +31,18 @@ void main() {
       expect(map['id'], isNull);
       expect(map['name'], '日用品');
     });
+
+    test('JSON の double 値（float）でも fromMap が動作する', () {
+      final map = {
+        'id': 1.0,
+        'name': '冷凍食品',
+        'sortOrder': 0.0,
+        'createdAt': 1700000000000.0,
+      };
+      final cat = Category.fromMap(map);
+      expect(cat.id, 1);
+      expect(cat.sortOrder, 0);
+      expect(cat.createdAt, 1700000000000);
+    });
   });
 }
