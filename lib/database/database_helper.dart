@@ -575,6 +575,7 @@ CREATE TABLE IF NOT EXISTS categories (
           'listId': listId,
           'sortOrder': nextOrder++,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
+          'categoryId': fav['categoryId'],
         });
       }
     });

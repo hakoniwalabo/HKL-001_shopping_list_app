@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database_helper.dart';
+import '../models/category.dart';
+import '../providers/category_provider.dart';
 import '../providers/item_provider.dart';
 import 'history_select_dialog.dart';
 
@@ -212,6 +214,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                               initialName: name,
                               initialPrice: price,
                               initialQuantity: qty,
+                              initialCategoryId: fav['categoryId'] as int?,
                             ),
                           );
                           await _load();
@@ -263,20 +266,22 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
   }
 }
 
-class _AddFavoriteDialog extends StatefulWidget {
+class _AddFavoriteDialog extends ConsumerStatefulWidget {
   final Future<void> Function() onAdded;
 
   const _AddFavoriteDialog({required this.onAdded});
 
   @override
-  State<_AddFavoriteDialog> createState() => _AddFavoriteDialogState();
+  ConsumerState<_AddFavoriteDialog> createState() =>
+      _AddFavoriteDialogState();
 }
 
-class _AddFavoriteDialogState extends State<_AddFavoriteDialog> {
+class _AddFavoriteDialogState extends ConsumerState<_AddFavoriteDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _priceCtrl = TextEditingController(text: '0');
   final _qtyCtrl = TextEditingController(text: '1');
+  int? _selectedCategoryId;
 
   @override
   void dispose() {
@@ -286,8 +291,37 @@ class _AddFavoriteDialogState extends State<_AddFavoriteDialog> {
     super.dispose();
   }
 
+  Future<void> _showNewCategoryDialog(List<Category> categories) async {
+    String newName = '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('カテゴリを追加'),
+        content: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'カテゴリ名'),
+          onChanged: (v) => newName = v.trim(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('追加'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || newName.isEmpty || !mounted) return;
+    final id = await ref.read(categoryProvider.notifier).addCategory(newName);
+    setState(() => _selectedCategoryId = id);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final categories = ref.watch(categoryProvider).value ?? <Category>[];
     return AlertDialog(
       title: const Text('よく買うものに登録'),
       content: Form(
@@ -328,6 +362,35 @@ class _AddFavoriteDialogState extends State<_AddFavoriteDialog> {
                 return (n == null || n < 1) ? '1以上の整数を入力してください' : null;
               },
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<int?>(
+                    decoration: const InputDecoration(
+                      labelText: 'カテゴリ（任意）',
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    initialValue: _selectedCategoryId,
+                    items: [
+                      const DropdownMenuItem<int?>(
+                          value: null, child: Text('なし')),
+                      ...categories.map((c) => DropdownMenuItem<int?>(
+                          value: c.id, child: Text(c.name))),
+                    ],
+                    onChanged: (v) => setState(() => _selectedCategoryId = v),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: '新規カテゴリ',
+                  icon: const Icon(Icons.add_circle_outline),
+                  onPressed: () => _showNewCategoryDialog(categories),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -343,6 +406,7 @@ class _AddFavoriteDialogState extends State<_AddFavoriteDialog> {
               _nameCtrl.text.trim(),
               int.parse(_priceCtrl.text),
               int.parse(_qtyCtrl.text),
+              categoryId: _selectedCategoryId,
             );
             if (!mounted) return;
             // ignore: use_build_context_synchronously
@@ -356,36 +420,40 @@ class _AddFavoriteDialogState extends State<_AddFavoriteDialog> {
   }
 }
 
-class _EditFavoriteDialog extends StatefulWidget {
+class _EditFavoriteDialog extends ConsumerStatefulWidget {
   final int id;
   final String initialName;
   final int initialPrice;
   final int initialQuantity;
+  final int? initialCategoryId;
 
   const _EditFavoriteDialog({
     required this.id,
     required this.initialName,
     required this.initialPrice,
     required this.initialQuantity,
+    this.initialCategoryId,
   });
 
   @override
-  State<_EditFavoriteDialog> createState() => _EditFavoriteDialogState();
+  ConsumerState<_EditFavoriteDialog> createState() =>
+      _EditFavoriteDialogState();
 }
 
-class _EditFavoriteDialogState extends State<_EditFavoriteDialog> {
+class _EditFavoriteDialogState extends ConsumerState<_EditFavoriteDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _priceCtrl;
   late final TextEditingController _qtyCtrl;
+  late int? _selectedCategoryId;
 
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.initialName);
     _priceCtrl = TextEditingController(text: widget.initialPrice.toString());
-    _qtyCtrl =
-        TextEditingController(text: widget.initialQuantity.toString());
+    _qtyCtrl = TextEditingController(text: widget.initialQuantity.toString());
+    _selectedCategoryId = widget.initialCategoryId;
   }
 
   @override
@@ -398,6 +466,7 @@ class _EditFavoriteDialogState extends State<_EditFavoriteDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final categories = ref.watch(categoryProvider).value ?? <Category>[];
     return AlertDialog(
       title: const Text('よく買うものを編集'),
       content: Form(
@@ -442,6 +511,22 @@ class _EditFavoriteDialogState extends State<_EditFavoriteDialog> {
                 return (n == null || n < 1) ? '1以上の整数を入力してください' : null;
               },
             ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int?>(
+              decoration: const InputDecoration(
+                labelText: 'カテゴリ（任意）',
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              initialValue: _selectedCategoryId,
+              items: [
+                const DropdownMenuItem<int?>(value: null, child: Text('なし')),
+                ...categories.map((c) => DropdownMenuItem<int?>(
+                    value: c.id, child: Text(c.name))),
+              ],
+              onChanged: (v) => setState(() => _selectedCategoryId = v),
+            ),
           ],
         ),
       ),
@@ -458,6 +543,7 @@ class _EditFavoriteDialogState extends State<_EditFavoriteDialog> {
               _nameCtrl.text.trim(),
               int.parse(_priceCtrl.text),
               int.parse(_qtyCtrl.text),
+              categoryId: _selectedCategoryId,
             );
             if (!mounted) return;
             // ignore: use_build_context_synchronously
