@@ -8,6 +8,7 @@ class Item {
   final int quantity;
   final String memo;
   final int listId;
+  final int? categoryId;
 
   Item({
     required this.name,
@@ -19,6 +20,7 @@ class Item {
     this.quantity = 1,
     this.memo = '',
     required this.listId,
+    this.categoryId,
   }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
   Map<String, dynamic> toMap() {
@@ -32,6 +34,7 @@ class Item {
       'quantity': quantity,
       'memo': memo,
       'listId': listId,
+      'categoryId': categoryId,
     };
   }
 
@@ -46,6 +49,7 @@ class Item {
       quantity: map['quantity'] ?? 1,
       memo: map['memo'] ?? '',
       listId: map['listId'],
+      categoryId: map['categoryId'] as int?,
     );
   }
 
@@ -59,6 +63,7 @@ class Item {
     int? quantity,
     String? memo,
     int? listId,
+    int? categoryId,
   }) {
     return Item(
       name: name ?? this.name,
@@ -70,6 +75,23 @@ class Item {
       quantity: quantity ?? this.quantity,
       memo: memo ?? this.memo,
       listId: listId ?? this.listId,
+      categoryId: categoryId ?? this.categoryId,
+    );
+  }
+
+  // copyWith は null を「変更なし」と解釈するため、categoryId を明示的に null にするにはこちらを使う。
+  Item copyWithNullableCategory({required int? categoryId}) {
+    return Item(
+      name: name,
+      price: price,
+      isChecked: isChecked,
+      id: id,
+      createdAt: createdAt,
+      sortOrder: sortOrder,
+      quantity: quantity,
+      memo: memo,
+      listId: listId,
+      categoryId: categoryId,
     );
   }
 }

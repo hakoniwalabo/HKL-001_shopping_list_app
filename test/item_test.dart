@@ -115,4 +115,44 @@ void main() {
       expect(next, 3);
     });
   });
+
+  // --------------------------------------------------------
+  // Item categoryId
+  // --------------------------------------------------------
+  group('Item categoryId', () {
+    test('categoryId が null の場合 fromMap で null になる', () {
+      final map = {
+        'id': 1, 'name': '牛乳', 'price': 198, 'isChecked': 0,
+        'createdAt': 1700000000000, 'sortOrder': 0,
+        'quantity': 1, 'memo': '', 'listId': 1,
+        'categoryId': null,
+      };
+      final item = Item.fromMap(map);
+      expect(item.categoryId, isNull);
+    });
+
+    test('categoryId が設定されている場合 fromMap で値が取れる', () {
+      final map = {
+        'id': 1, 'name': '牛乳', 'price': 198, 'isChecked': 0,
+        'createdAt': 1700000000000, 'sortOrder': 0,
+        'quantity': 1, 'memo': '', 'listId': 1,
+        'categoryId': 3,
+      };
+      final item = Item.fromMap(map);
+      expect(item.categoryId, 3);
+    });
+
+    test('copyWith で categoryId を更新できる', () {
+      final item = Item(name: '卵', price: 248, listId: 1, categoryId: 1);
+      final updated = item.copyWith(categoryId: 2);
+      expect(updated.categoryId, 2);
+      expect(updated.name, '卵');
+    });
+
+    test('copyWith でカテゴリを null にクリアできる', () {
+      final item = Item(name: '卵', price: 248, listId: 1, categoryId: 1);
+      final cleared = item.copyWithNullableCategory(categoryId: null);
+      expect(cleared.categoryId, isNull);
+    });
+  });
 }
