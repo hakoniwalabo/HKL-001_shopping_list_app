@@ -239,7 +239,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
                         contentPadding:
                             EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
-                      value: _selectedCategoryId,
+                      initialValue: _selectedCategoryId,
                       items: [
                         const DropdownMenuItem<int?>(
                           value: null,
