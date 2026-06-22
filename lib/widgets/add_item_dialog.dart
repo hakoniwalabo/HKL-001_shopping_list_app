@@ -53,6 +53,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
   late final TextEditingController _memoCtrl;
 
   final FocusNode _nameFocus = FocusNode();
+  final ScrollController _scrollCtrl = ScrollController();
   int _addedCount = 0;
   int? _selectedCategoryId;
 
@@ -76,6 +77,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
     _quantityCtrl.dispose();
     _memoCtrl.dispose();
     _nameFocus.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -198,72 +200,77 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
 
     return AlertDialog(
       title: Text(isEdit ? '商品編集' : '商品追加'),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (!isEdit && _addedCount > 0) ...[
-                Text(
-                  '$_addedCount件追加しました',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-              ItemNameField(
-                controller: _nameCtrl,
-                historyNames: widget.historyNames,
-                focusNode: _nameFocus,
-              ),
-              const SizedBox(height: 12),
-              PriceField(controller: _priceCtrl),
-              const SizedBox(height: 12),
-              QuantityField(controller: _quantityCtrl),
-              if (isEdit) ...[
-                const SizedBox(height: 12),
-                MemoField(controller: _memoCtrl),
-              ],
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<int?>(
-                      decoration: const InputDecoration(
-                        labelText: 'カテゴリ（任意）',
-                        border: OutlineInputBorder(),
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      initialValue: _selectedCategoryId,
-                      items: [
-                        const DropdownMenuItem<int?>(
-                          value: null,
-                          child: Text('なし'),
-                        ),
-                        ...categories.map(
-                          (c) => DropdownMenuItem<int?>(
-                            value: c.id,
-                            child: Text(c.name),
-                          ),
-                        ),
-                      ],
-                      onChanged: (v) => setState(() => _selectedCategoryId = v),
+      content: Scrollbar(
+        controller: _scrollCtrl,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _scrollCtrl,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!isEdit && _addedCount > 0) ...[
+                  Text(
+                    '$_addedCount件追加しました',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: '新規カテゴリ',
-                    icon: const Icon(Icons.add_circle_outline),
-                    onPressed: () => _showNewCategoryDialog(categories),
-                  ),
+                  const SizedBox(height: 8),
                 ],
-              ),
-            ],
+                ItemNameField(
+                  controller: _nameCtrl,
+                  historyNames: widget.historyNames,
+                  focusNode: _nameFocus,
+                ),
+                const SizedBox(height: 12),
+                PriceField(controller: _priceCtrl),
+                const SizedBox(height: 12),
+                QuantityField(controller: _quantityCtrl),
+                if (isEdit) ...[
+                  const SizedBox(height: 12),
+                  MemoField(controller: _memoCtrl),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<int?>(
+                        decoration: const InputDecoration(
+                          labelText: 'カテゴリ（任意）',
+                          border: OutlineInputBorder(),
+                          contentPadding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                        initialValue: _selectedCategoryId,
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('なし'),
+                          ),
+                          ...categories.map(
+                            (c) => DropdownMenuItem<int?>(
+                              value: c.id,
+                              child: Text(c.name),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => _selectedCategoryId = v),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: '新規カテゴリ',
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: () => _showNewCategoryDialog(categories),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
