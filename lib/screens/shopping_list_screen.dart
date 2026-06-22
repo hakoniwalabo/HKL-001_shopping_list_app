@@ -21,6 +21,7 @@ import '../widgets/help_dialog.dart';
 import '../widgets/total_summary.dart';
 import '../widgets/upgrade_dialog.dart';
 import '../services/backup_service.dart';
+import '../widgets/category_management_dialog.dart';
 
 class ShoppingListScreen extends ConsumerStatefulWidget {
   const ShoppingListScreen({super.key});
@@ -635,7 +636,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           PopupMenuButton<_OptionItem>(
             icon: const Icon(Icons.more_vert),
             tooltip: 'オプション',
-            onSelected: (item) {
+            onSelected: (item) async {
               switch (item) {
                 case _OptionItem.deleteList:
                   _showDeleteListDialog();
@@ -657,6 +658,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                   _exportBackup();
                 case _OptionItem.importBackup:
                   _importBackup();
+                case _OptionItem.categories:
+                  if (!mounted) return;
+                  await showCategoryManagementDialog(context);
               }
             },
             itemBuilder: (_) => [
@@ -697,6 +701,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                 child: ListTile(
                   leading: Icon(Icons.restore_outlined),
                   title: Text('読み込む（バックアップ／共有リスト）'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: _OptionItem.categories,
+                child: ListTile(
+                  leading: Icon(Icons.label_outline),
+                  title: Text('カテゴリを管理'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -886,7 +898,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   }
 }
 
-enum _OptionItem { share, shareListFile, upgrade, help, deleteList, backup, importBackup }
+enum _OptionItem { share, shareListFile, upgrade, help, deleteList, backup, importBackup, categories }
 
 class _SingleFieldDialog extends StatefulWidget {
   final String title;
