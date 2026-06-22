@@ -39,6 +39,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   List<ShoppingList> shoppingLists = [];
 
   TabController? _tabController;
+  final ScrollController _listScrollCtrl = ScrollController();
 
   int currentListId = 1;
   bool _isChangingTab = false;
@@ -703,6 +704,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   @override
   void dispose() {
     _tabController?.dispose();
+    _listScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -867,10 +869,14 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
               Expanded(
                 child: items.isEmpty
                     ? const EmptyStateView()
-                    : Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: ListView(
-                          children: [
+                    : Scrollbar(
+                        controller: _listScrollCtrl,
+                        thumbVisibility: true,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: ListView(
+                            controller: _listScrollCtrl,
+                            children: [
                             if (checked.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
@@ -936,6 +942,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                           ],
                         ),
                       ),
+                    ),
               ),
             ],
           );
