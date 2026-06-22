@@ -18,25 +18,28 @@ class BackupService {
     return base.length > 50 ? base.substring(0, 50) : base;
   }
 
-  /// version:1 エクスポート Map を構築する（純粋関数）。
+  /// version:2 エクスポート Map を構築する（純粋関数）。
   static Map<String, dynamic> buildExportMap({
+    required List<Map<String, dynamic>> categories,
     required List<Map<String, dynamic>> lists,
     required List<Map<String, dynamic>> items,
     required List<Map<String, dynamic>> favorites,
     required int exportedAt,
   }) {
     return {
-      'version': 1,
+      'version': 2,
       'exportedAt': exportedAt,
+      'categories': categories,
       'lists': lists,
       'items': items,
       'favorites': favorites,
     };
   }
 
-  /// 全データを version:1 JSON 文字列に変換する。
+  /// 全データを version:2 JSON 文字列に変換する。
   static Future<String> _buildFullBackupJson() async {
     final helper = DatabaseHelper.instance;
+    final categories = await helper.getCategories();
     final lists = await helper.getLists();
 
     final allItems = <Map<String, dynamic>>[];
@@ -47,6 +50,7 @@ class BackupService {
     final favorites = await helper.getFavorites();
 
     final map = buildExportMap(
+      categories: categories,
       lists: lists.map((l) => l.toMap()).toList(),
       items: allItems,
       favorites: favorites,
@@ -107,7 +111,14 @@ class BackupService {
     final unchecked = items.where((i) => !i.isChecked).toList();
     if (unchecked.isEmpty) return false;
 
+    final usedCategoryIds =
+        unchecked.map((i) => i.categoryId).whereType<int>().toSet();
+    final allCategories = await helper.getCategories();
+    final usedCategories =
+        allCategories.where((c) => usedCategoryIds.contains(c['id'])).toList();
+
     final map = buildExportMap(
+      categories: usedCategories,
       lists: [target.first.toMap()],
       items: unchecked.map((i) => i.toMap()).toList(),
       favorites: const [],
@@ -163,12 +174,16 @@ class BackupService {
     if (data['version'] is! int) {
       throw const FormatException('invalid_json');
     }
-    if (data['version'] != 1) {
+    final version = data['version'] as int;
+    if (version != 1 && version != 2) {
       throw const FormatException('unsupported_version');
     }
     if (data['lists'] is! List ||
         data['items'] is! List ||
         data['favorites'] is! List) {
+      throw const FormatException('invalid_json');
+    }
+    if (version == 2 && data['categories'] is! List) {
       throw const FormatException('invalid_json');
     }
     return data;

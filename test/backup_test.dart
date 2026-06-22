@@ -39,9 +39,9 @@ void main() {
       );
     });
 
-    test('version が 1 以外の整数で unsupported_version を投げる', () {
+    test('version が 1 でも 2 でもない整数で unsupported_version を投げる', () {
       const json =
-          '{"version":2,"exportedAt":1234,"lists":[],"items":[],"favorites":[]}';
+          '{"version":3,"exportedAt":1234,"lists":[],"items":[],"favorites":[]}';
       expect(
         () => BackupService.parseAndValidate(json),
         throwsA(predicate<FormatException>(
@@ -63,6 +63,45 @@ void main() {
 
     test('必須キーが欠けると invalid_json を投げる', () {
       const json = '{"version":1,"exportedAt":1234,"lists":[]}';
+      expect(
+        () => BackupService.parseAndValidate(json),
+        throwsA(predicate<FormatException>(
+          (e) => e.message == 'invalid_json',
+        )),
+      );
+    });
+  });
+
+  group('BackupService.parseAndValidate version:2', () {
+    test('version:2 の正常な JSON をパースして返す', () {
+      const json =
+          '{"version":2,"exportedAt":1234,"categories":[],"lists":[],"items":[],"favorites":[]}';
+      final result = BackupService.parseAndValidate(json);
+      expect(result['version'], 2);
+      expect(result['categories'], isA<List>());
+    });
+
+    test('version:1 は引き続き受け入れる（後方互換）', () {
+      const json =
+          '{"version":1,"exportedAt":1234,"lists":[],"items":[],"favorites":[]}';
+      final result = BackupService.parseAndValidate(json);
+      expect(result['version'], 1);
+    });
+
+    test('version:3 は unsupported_version を投げる', () {
+      const json =
+          '{"version":3,"exportedAt":1234,"categories":[],"lists":[],"items":[],"favorites":[]}';
+      expect(
+        () => BackupService.parseAndValidate(json),
+        throwsA(predicate<FormatException>(
+          (e) => e.message == 'unsupported_version',
+        )),
+      );
+    });
+
+    test('version:2 で categories キーが欠けると invalid_json を投げる', () {
+      const json =
+          '{"version":2,"exportedAt":1234,"lists":[],"items":[],"favorites":[]}';
       expect(
         () => BackupService.parseAndValidate(json),
         throwsA(predicate<FormatException>(
@@ -98,15 +137,17 @@ void main() {
   });
 
   group('BackupService.buildExportMap', () {
-    test('version と各セクションを格納する', () {
+    test('version:2 と各セクションを格納する', () {
       final map = BackupService.buildExportMap(
+        categories: [{'id': 1, 'name': '野菜', 'sortOrder': 0, 'createdAt': 100}],
         lists: [{'id': 1, 'name': 'A', 'createdAt': 100}],
         items: [{'id': 1, 'name': '牛乳', 'listId': 1}],
         favorites: [],
         exportedAt: 12345,
       );
-      expect(map['version'], 1);
+      expect(map['version'], 2);
       expect(map['exportedAt'], 12345);
+      expect((map['categories'] as List).length, 1);
       expect((map['lists'] as List).length, 1);
       expect((map['items'] as List).length, 1);
       expect((map['favorites'] as List).isEmpty, true);

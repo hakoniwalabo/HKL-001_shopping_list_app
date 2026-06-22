@@ -594,6 +594,10 @@ CREATE TABLE IF NOT EXISTS categories (
     }
     final db = await database;
 
+    final version = data['version'] as int? ?? 1;
+    final incomingCategories = version == 2
+        ? List<Map<String, dynamic>>.from(data['categories'] as List)
+        : <Map<String, dynamic>>[];
     final incomingLists =
         List<Map<String, dynamic>>.from(data['lists'] as List);
     final incomingItems =
@@ -611,9 +615,45 @@ CREATE TABLE IF NOT EXISTS categories (
     }
 
     final listIdMap = <int, int>{};
+    final categoryIdMap = <int, int>{};
     int insertedFavCount = 0;
 
     await db.transaction((txn) async {
+      // categories INSERT（name 重複はスキップ）
+      final existingCatRows =
+          await txn.query('categories', columns: ['name']);
+      final existingCatNames =
+          existingCatRows.map((r) => r['name'] as String).toSet();
+      final maxCatResult = await txn.rawQuery(
+        'SELECT MAX(sortOrder) as maxOrder FROM categories',
+      );
+      int nextCatOrder =
+          ((maxCatResult.first['maxOrder'] as int?) ?? -1) + 1;
+
+      for (final cat in incomingCategories) {
+        final oldId = (cat['id'] as num).toInt();
+        final catName = cat['name'] as String;
+        if (existingCatNames.contains(catName)) {
+          final existing = await txn.query(
+            'categories',
+            columns: ['id'],
+            where: 'name = ?',
+            whereArgs: [catName],
+          );
+          if (existing.isNotEmpty) {
+            categoryIdMap[oldId] = existing.first['id'] as int;
+          }
+          continue;
+        }
+        existingCatNames.add(catName);
+        final newId = await txn.insert('categories', {
+          'name': catName,
+          'sortOrder': nextCatOrder++,
+          'createdAt': cat['createdAt'],
+        });
+        categoryIdMap[oldId] = newId;
+      }
+
       // lists INSERT
       for (final list in incomingLists) {
         final oldId = (list['id'] as num).toInt();
@@ -628,15 +668,23 @@ CREATE TABLE IF NOT EXISTS categories (
         listIdMap[oldId] = newId;
       }
 
-      // items INSERT（listId を新IDに差し替え）
+      // items INSERT（listId・categoryId を新IDに差し替え）
       for (final item in incomingItems) {
         final oldListId = (item['listId'] as num).toInt();
         final newListId = listIdMap[oldListId];
         if (newListId == null) continue;
 
+        final oldCategoryId = item['categoryId'] != null
+            ? (item['categoryId'] as num).toInt()
+            : null;
+        final newCategoryId = oldCategoryId != null
+            ? categoryIdMap[oldCategoryId]
+            : null;
+
         final copy = Map<String, dynamic>.from(item)
           ..remove('id')
-          ..['listId'] = newListId;
+          ..['listId'] = newListId
+          ..['categoryId'] = newCategoryId;
         await txn.insert('items', copy);
       }
 
@@ -654,9 +702,18 @@ CREATE TABLE IF NOT EXISTS categories (
         final favName = fav['name'] as String;
         if (existingFavNames.contains(favName)) continue;
         existingFavNames.add(favName);
+
+        final oldCategoryId = fav['categoryId'] != null
+            ? (fav['categoryId'] as num).toInt()
+            : null;
+        final newCategoryId = oldCategoryId != null
+            ? categoryIdMap[oldCategoryId]
+            : null;
+
         final copy = Map<String, dynamic>.from(fav)
           ..remove('id')
-          ..['sortOrder'] = nextOrder++;
+          ..['sortOrder'] = nextOrder++
+          ..['categoryId'] = newCategoryId;
         await txn.insert('favorites', copy);
         insertedFavCount++;
       }
