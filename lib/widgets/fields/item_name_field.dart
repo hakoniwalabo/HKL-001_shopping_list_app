@@ -30,6 +30,9 @@ class _ItemNameFieldState extends State<ItemNameField> {
       _internalFocusNode = FocusNode();
     }
     _focusNode.addListener(_onFocusChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
   }
 
   @override
@@ -75,7 +78,7 @@ class _ItemNameFieldState extends State<ItemNameField> {
         TextFormField(
           controller: widget.controller,
           focusNode: _focusNode,
-          autofocus: true,
+          autofocus: false,
           decoration: const InputDecoration(labelText: '商品名'),
           onChanged: _updateSuggestions,
           validator: (value) {

@@ -13,6 +13,7 @@ class HistorySelectDialog extends StatefulWidget {
 class _HistorySelectDialogState extends State<HistorySelectDialog> {
   List<String> _allNames = [];
   final Set<String> _selected = {};
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
@@ -29,6 +30,12 @@ class _HistorySelectDialogState extends State<HistorySelectDialog> {
   }
 
   @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('履歴から登録'),
@@ -36,27 +43,32 @@ class _HistorySelectDialogState extends State<HistorySelectDialog> {
         width: double.maxFinite,
         child: _allNames.isEmpty
             ? const Text('履歴がありません')
-            : LimitedBox(
-                maxHeight: 320,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _allNames.length,
-                  itemBuilder: (_, i) {
-                    final name = _allNames[i];
-                    return CheckboxListTile(
-                      value: _selected.contains(name),
-                      title: Text(name),
-                      onChanged: (v) {
-                        setState(() {
-                          if (v == true) {
-                            _selected.add(name);
-                          } else {
-                            _selected.remove(name);
-                          }
-                        });
-                      },
-                    );
-                  },
+            : ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: Scrollbar(
+                  controller: _scrollCtrl,
+                  thumbVisibility: true,
+                  child: ListView.builder(
+                    controller: _scrollCtrl,
+                    shrinkWrap: true,
+                    itemCount: _allNames.length,
+                    itemBuilder: (_, i) {
+                      final name = _allNames[i];
+                      return CheckboxListTile(
+                        value: _selected.contains(name),
+                        title: Text(name),
+                        onChanged: (v) {
+                          setState(() {
+                            if (v == true) {
+                              _selected.add(name);
+                            } else {
+                              _selected.remove(name);
+                            }
+                          });
+                        },
+                      );
+                    },
+                  ),
                 ),
               ),
       ),

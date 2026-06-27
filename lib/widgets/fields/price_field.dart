@@ -10,6 +10,7 @@ class PriceField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
+      keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       decoration: const InputDecoration(labelText: '税込価格'),
       onTap: () => controller.selection = TextSelection(

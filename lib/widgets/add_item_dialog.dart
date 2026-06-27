@@ -116,7 +116,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
         return;
       }
       setState(() => _addedCount++);
-      _nameCtrl.clear();
+      _nameCtrl.value = TextEditingValue.empty;
       _priceCtrl.text = '0';
       _quantityCtrl.text = '1';
       _nameFocus.requestFocus();

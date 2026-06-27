@@ -22,6 +22,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
   final Set<int> _selectedIds = {};
   Map<String, dynamic>? _pendingUndoFavorite;
   Timer? _undoTimer;
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
@@ -32,6 +33,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
   @override
   void dispose() {
     _undoTimer?.cancel();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -155,11 +157,15 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
             else
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 320),
-                child: ReorderableListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _favorites.length,
-                  onReorderItem: _onReorderItem,
-                  itemBuilder: (_, i) {
+                child: Scrollbar(
+                  controller: _scrollCtrl,
+                  thumbVisibility: true,
+                  child: ReorderableListView.builder(
+                    scrollController: _scrollCtrl,
+                    shrinkWrap: true,
+                    itemCount: _favorites.length,
+                    onReorderItem: _onReorderItem,
+                    itemBuilder: (_, i) {
                     final fav = _favorites[i];
                     final id = fav['id'] as int;
                     final name = fav['name'] as String;
@@ -226,6 +232,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                       ),
                     );
                   },
+                  ),
                 ),
               ),
           ],
@@ -324,74 +331,76 @@ class _AddFavoriteDialogState extends ConsumerState<_AddFavoriteDialog> {
     final categories = ref.watch(categoryProvider).value ?? <Category>[];
     return AlertDialog(
       title: const Text('よく買うものに登録'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _nameCtrl,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: '商品名'),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? '商品名を入力してください' : null,
-            ),
-            TextFormField(
-              controller: _priceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '税込価格'),
-              onTap: () => _priceCtrl.selection = TextSelection(
-                baseOffset: 0,
-                extentOffset: _priceCtrl.text.length,
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: '商品名'),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? '商品名を入力してください' : null,
               ),
-              validator: (v) {
-                final n = int.tryParse(v ?? '');
-                return (n == null || n < 0) ? '0以上の整数を入力してください' : null;
-              },
-            ),
-            TextFormField(
-              controller: _qtyCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '個数'),
-              onTap: () => _qtyCtrl.selection = TextSelection(
-                baseOffset: 0,
-                extentOffset: _qtyCtrl.text.length,
+              TextFormField(
+                controller: _priceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '税込価格'),
+                onTap: () => _priceCtrl.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: _priceCtrl.text.length,
+                ),
+                validator: (v) {
+                  final n = int.tryParse(v ?? '');
+                  return (n == null || n < 0) ? '0以上の整数を入力してください' : null;
+                },
               ),
-              validator: (v) {
-                final n = int.tryParse(v ?? '');
-                return (n == null || n < 1) ? '1以上の整数を入力してください' : null;
-              },
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<int?>(
-                    decoration: const InputDecoration(
-                      labelText: 'カテゴリ（任意）',
-                      border: OutlineInputBorder(),
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              TextFormField(
+                controller: _qtyCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '個数'),
+                onTap: () => _qtyCtrl.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: _qtyCtrl.text.length,
+                ),
+                validator: (v) {
+                  final n = int.tryParse(v ?? '');
+                  return (n == null || n < 1) ? '1以上の整数を入力してください' : null;
+                },
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int?>(
+                      decoration: const InputDecoration(
+                        labelText: 'カテゴリ（任意）',
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      initialValue: _selectedCategoryId,
+                      items: [
+                        const DropdownMenuItem<int?>(
+                            value: null, child: Text('なし')),
+                        ...categories.map((c) => DropdownMenuItem<int?>(
+                            value: c.id, child: Text(c.name))),
+                      ],
+                      onChanged: (v) => setState(() => _selectedCategoryId = v),
                     ),
-                    initialValue: _selectedCategoryId,
-                    items: [
-                      const DropdownMenuItem<int?>(
-                          value: null, child: Text('なし')),
-                      ...categories.map((c) => DropdownMenuItem<int?>(
-                          value: c.id, child: Text(c.name))),
-                    ],
-                    onChanged: (v) => setState(() => _selectedCategoryId = v),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: '新規カテゴリ',
-                  icon: const Icon(Icons.add_circle_outline),
-                  onPressed: () => _showNewCategoryDialog(categories),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: '新規カテゴリ',
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: () => _showNewCategoryDialog(categories),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -469,65 +478,67 @@ class _EditFavoriteDialogState extends ConsumerState<_EditFavoriteDialog> {
     final categories = ref.watch(categoryProvider).value ?? <Category>[];
     return AlertDialog(
       title: const Text('よく買うものを編集'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _nameCtrl,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: '商品名'),
-              onTap: () => _nameCtrl.selection = TextSelection(
-                baseOffset: 0,
-                extentOffset: _nameCtrl.text.length,
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: '商品名'),
+                onTap: () => _nameCtrl.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: _nameCtrl.text.length,
+                ),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? '商品名を入力してください' : null,
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? '商品名を入力してください' : null,
-            ),
-            TextFormField(
-              controller: _priceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '税込価格'),
-              onTap: () => _priceCtrl.selection = TextSelection(
-                baseOffset: 0,
-                extentOffset: _priceCtrl.text.length,
+              TextFormField(
+                controller: _priceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '税込価格'),
+                onTap: () => _priceCtrl.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: _priceCtrl.text.length,
+                ),
+                validator: (v) {
+                  final n = int.tryParse(v ?? '');
+                  return (n == null || n < 0) ? '0以上の整数を入力してください' : null;
+                },
               ),
-              validator: (v) {
-                final n = int.tryParse(v ?? '');
-                return (n == null || n < 0) ? '0以上の整数を入力してください' : null;
-              },
-            ),
-            TextFormField(
-              controller: _qtyCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '個数'),
-              onTap: () => _qtyCtrl.selection = TextSelection(
-                baseOffset: 0,
-                extentOffset: _qtyCtrl.text.length,
+              TextFormField(
+                controller: _qtyCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '個数'),
+                onTap: () => _qtyCtrl.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: _qtyCtrl.text.length,
+                ),
+                validator: (v) {
+                  final n = int.tryParse(v ?? '');
+                  return (n == null || n < 1) ? '1以上の整数を入力してください' : null;
+                },
               ),
-              validator: (v) {
-                final n = int.tryParse(v ?? '');
-                return (n == null || n < 1) ? '1以上の整数を入力してください' : null;
-              },
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<int?>(
-              decoration: const InputDecoration(
-                labelText: 'カテゴリ（任意）',
-                border: OutlineInputBorder(),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int?>(
+                decoration: const InputDecoration(
+                  labelText: 'カテゴリ（任意）',
+                  border: OutlineInputBorder(),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                initialValue: _selectedCategoryId,
+                items: [
+                  const DropdownMenuItem<int?>(value: null, child: Text('なし')),
+                  ...categories.map((c) => DropdownMenuItem<int?>(
+                      value: c.id, child: Text(c.name))),
+                ],
+                onChanged: (v) => setState(() => _selectedCategoryId = v),
               ),
-              initialValue: _selectedCategoryId,
-              items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('なし')),
-                ...categories.map((c) => DropdownMenuItem<int?>(
-                    value: c.id, child: Text(c.name))),
-              ],
-              onChanged: (v) => setState(() => _selectedCategoryId = v),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [
