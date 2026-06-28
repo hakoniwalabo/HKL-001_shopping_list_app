@@ -14,14 +14,14 @@ import 'fields/memo_field.dart';
 Future<void> showAddItemDialog({
   required BuildContext context,
   required int currentListId,
-  required List<String> historyNames,
+  required List<String> candidateNames,
   Item? item,
 }) async {
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => _AddItemDialogContent(
       currentListId: currentListId,
-      historyNames: historyNames,
+      candidateNames: candidateNames,
       item: item,
     ),
   );
@@ -31,12 +31,12 @@ enum _CloseAction { cancel, discard, add }
 
 class _AddItemDialogContent extends ConsumerStatefulWidget {
   final int currentListId;
-  final List<String> historyNames;
+  final List<String> candidateNames;
   final Item? item;
 
   const _AddItemDialogContent({
     required this.currentListId,
-    required this.historyNames,
+    required this.candidateNames,
     this.item,
   });
 
@@ -56,6 +56,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
   final ScrollController _scrollCtrl = ScrollController();
   int _addedCount = 0;
   int? _selectedCategoryId;
+  bool _addToFavorites = false;
 
   @override
   void initState() {
@@ -109,13 +110,24 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
       );
       await ref.read(itemProvider.notifier).addItem(newItem);
       await DatabaseHelper.instance.upsertHistory(name);
+      if (_addToFavorites) {
+        await DatabaseHelper.instance.insertFavorite(
+          name,
+          price,
+          quantity,
+          categoryId: _selectedCategoryId,
+        );
+      }
 
       if (!mounted) return;
       if (closeAfter) {
         Navigator.of(context).pop();
         return;
       }
-      setState(() => _addedCount++);
+      setState(() {
+        _addedCount++;
+        _addToFavorites = false;
+      });
       _nameCtrl.value = TextEditingValue.empty;
       _priceCtrl.text = '0';
       _quantityCtrl.text = '1';
@@ -223,7 +235,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
                 ],
                 ItemNameField(
                   controller: _nameCtrl,
-                  historyNames: widget.historyNames,
+                  candidateNames: widget.candidateNames,
                   focusNode: _nameFocus,
                 ),
                 const SizedBox(height: 12),
@@ -269,6 +281,17 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
                     ),
                   ],
                 ),
+                if (!isEdit) ...[
+                  const SizedBox(height: 4),
+                  CheckboxListTile(
+                    value: _addToFavorites,
+                    onChanged: (v) => setState(() => _addToFavorites = v ?? false),
+                    title: const Text('よく買うものにも登録する'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ],
               ],
             ),
           ),

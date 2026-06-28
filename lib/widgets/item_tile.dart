@@ -15,6 +15,7 @@ class ItemTile extends StatelessWidget {
   final Future<void> Function(bool?) onToggleCheck;
 
   final VoidCallback? onMoveToTab;
+  final VoidCallback? onAddToFavorites;
 
   const ItemTile({
     super.key,
@@ -25,6 +26,7 @@ class ItemTile extends StatelessWidget {
     required this.onToggleCheck,
     this.reorderIndex,
     this.onMoveToTab,
+    this.onAddToFavorites,
   });
 
   @override
@@ -55,7 +57,32 @@ class ItemTile extends StatelessWidget {
         leading: Checkbox(value: item.isChecked, onChanged: onToggleCheck),
 
         onTap: onTap,
-        onLongPress: onMoveToTab,
+        onLongPress: (onMoveToTab == null && onAddToFavorites == null)
+            ? null
+            : () async {
+                final result = await showModalBottomSheet<String>(
+                  context: context,
+                  builder: (_) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (onMoveToTab != null)
+                        ListTile(
+                          leading: const Icon(Icons.swap_horiz),
+                          title: const Text('別タブに移動'),
+                          onTap: () => Navigator.pop(context, 'move'),
+                        ),
+                      if (onAddToFavorites != null)
+                        ListTile(
+                          leading: const Icon(Icons.star_outline),
+                          title: const Text('よく買うものに登録'),
+                          onTap: () => Navigator.pop(context, 'favorite'),
+                        ),
+                    ],
+                  ),
+                );
+                if (result == 'move') onMoveToTab?.call();
+                if (result == 'favorite') onAddToFavorites?.call();
+              },
 
         title: Text(
           item.name,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class ItemNameField extends StatefulWidget {
   final TextEditingController controller;
-  final List<String> historyNames;
+  final List<String> candidateNames;
 
   /// 外部からフォーカスを制御したい場合に渡す。未指定なら内部で生成する。
   final FocusNode? focusNode;
@@ -10,7 +10,7 @@ class ItemNameField extends StatefulWidget {
   const ItemNameField({
     super.key,
     required this.controller,
-    required this.historyNames,
+    required this.candidateNames,
     this.focusNode,
   });
 
@@ -58,7 +58,7 @@ class _ItemNameFieldState extends State<ItemNameField> {
       setState(() => _suggestions = []);
       return;
     }
-    final filtered = widget.historyNames
+    final filtered = widget.candidateNames
         .where((n) => n.toLowerCase().contains(text.toLowerCase()))
         .toList();
     setState(() => _suggestions = filtered.take(8).toList());

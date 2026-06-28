@@ -34,7 +34,6 @@ class ShoppingListScreen extends ConsumerStatefulWidget {
 
 class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     with TickerProviderStateMixin {
-  List<String> historyNames = [];
   List<Item>? _pendingUndoItems;
   List<ShoppingList> shoppingLists = [];
 
@@ -49,18 +48,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   void initState() {
     super.initState();
 
-    loadHistory();
     loadLists();
-  }
-
-  Future<void> loadHistory() async {
-    final data = await DatabaseHelper.instance.getHistoryNames();
-
-    if (!mounted) return;
-
-    setState(() {
-      historyNames = data;
-    });
   }
 
   Future<void> loadLists() async {
@@ -598,17 +586,16 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     required List<Item> unchecked,
     required List<Category> categories,
     required NumberFormat numberFormat,
+    required List<String> candidateNames,
   }) {
     VoidCallback onTapFor(Item item) => () {
-          showAddItemDialog(
-            context: context,
-            currentListId: currentListId,
-            historyNames: historyNames,
-            item: item,
-          ).then((_) {
-            if (mounted) loadHistory();
-          });
-        };
+      showAddItemDialog(
+        context: context,
+        currentListId: currentListId,
+        candidateNames: candidateNames,
+        item: item,
+      );
+    };
 
     Future<void> onToggleCheck(Item item) async {
       await ref.read(itemProvider.notifier).toggleCheck(item.id!);
@@ -627,6 +614,19 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     VoidCallback onMoveToTabFor(Item item) =>
         () => _showMoveToTabDialog(item);
 
+    VoidCallback onAddToFavoritesFor(Item item) => () async {
+      await DatabaseHelper.instance.insertFavorite(
+        item.name,
+        item.price,
+        item.quantity,
+        categoryId: item.categoryId,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('「${item.name}」をよく買うものに登録しました')),
+      );
+    };
+
     if (categories.isEmpty) {
       return [
         ListSection(
@@ -643,6 +643,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           onDelete: onDelete,
           onTap: onTapFor,
           onMoveToTab: (item) => onMoveToTabFor(item),
+          onAddToFavorites: (item) => onAddToFavoritesFor(item),
         ),
       ];
     }
@@ -670,6 +671,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           onDelete: onDelete,
           onTap: onTapFor,
           onMoveToTab: (item) => onMoveToTabFor(item),
+          onAddToFavorites: (item) => onAddToFavoritesFor(item),
         ),
       );
     }
@@ -694,6 +696,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           onDelete: onDelete,
           onTap: onTapFor,
           onMoveToTab: (item) => onMoveToTabFor(item),
+          onAddToFavorites: (item) => onAddToFavoritesFor(item),
         ),
       );
     }
@@ -711,6 +714,10 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   @override
   Widget build(BuildContext context) {
     final itemAsync = ref.watch(itemProvider);
+    final candidateNames = itemAsync.maybeWhen(
+      data: (items) => items.map((i) => i.name).toList(),
+      orElse: () => <String>[],
+    );
     const kHideAds = bool.fromEnvironment('HIDE_ADS');
     final isAdFree = kHideAds || ref.watch(purchaseProvider).maybeWhen(
       data: (v) => v,
@@ -893,6 +900,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                               unchecked: unchecked,
                               categories: categories,
                               numberFormat: numberFormat,
+                              candidateNames: candidateNames,
                             ),
 
                             const Divider(thickness: 1.5),
@@ -908,15 +916,27 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
                               onMoveToTab: (item) => () => _showMoveToTabDialog(item),
 
+                              onAddToFavorites: (item) => () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                await DatabaseHelper.instance.insertFavorite(
+                                  item.name,
+                                  item.price,
+                                  item.quantity,
+                                  categoryId: item.categoryId,
+                                );
+                                if (!mounted) return;
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text('「${item.name}」をよく買うものに登録しました')),
+                                );
+                              },
+
                               onTap: (item) => () {
                                 showAddItemDialog(
                                   context: context,
                                   currentListId: currentListId,
-                                  historyNames: historyNames,
+                                  candidateNames: candidateNames,
                                   item: item,
-                                ).then((_) {
-                                  if (mounted) loadHistory();
-                                });
+                                );
                               },
 
                               onToggleCheck: (item) async {
@@ -960,9 +980,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           await showAddItemDialog(
             context: context,
             currentListId: currentListId,
-            historyNames: historyNames,
+            candidateNames: candidateNames,
           );
-          if (mounted) await loadHistory();
         },
 
         icon: const Icon(Icons.add),

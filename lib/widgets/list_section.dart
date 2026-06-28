@@ -21,6 +21,8 @@ class ListSection extends StatelessWidget {
 
   final VoidCallback Function(Item item)? onMoveToTab;
 
+  final VoidCallback? Function(Item item)? onAddToFavorites;
+
   const ListSection({
     super.key,
     required this.title,
@@ -32,6 +34,7 @@ class ListSection extends StatelessWidget {
     required this.onTap,
     this.onReorder,
     this.onMoveToTab,
+    this.onAddToFavorites,
   });
 
   @override
@@ -89,6 +92,9 @@ class ListSection extends StatelessWidget {
                   onMoveToTab: onMoveToTab != null
                       ? onMoveToTab!(items[i])
                       : null,
+                  onAddToFavorites: onAddToFavorites != null
+                      ? onAddToFavorites!(items[i])
+                      : null,
                 ),
             ],
           )
@@ -112,6 +118,9 @@ class ListSection extends StatelessWidget {
               },
 
               onMoveToTab: onMoveToTab != null ? onMoveToTab!(item) : null,
+              onAddToFavorites: onAddToFavorites != null
+                  ? onAddToFavorites!(item)
+                  : null,
             ),
           ),
       ],
