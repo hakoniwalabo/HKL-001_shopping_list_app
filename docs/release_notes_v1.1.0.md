@@ -12,8 +12,8 @@
 
 ## English（en-US）
 
-• Added Favorites List. Save your go-to items and add them to your shopping list all at once with a single tap. Supports swipe-to-delete, drag-to-reorder, and search.
-• Added Backup & Share. Export your data as a file to save or send it, and share your current list with another device's app.
-• Added Categories. Organize your items by category and switch your list view to a grouped, category-by-category layout. Categories can also be assigned to your Favorites.
-• Added a search bar, scroll bar, and close button to the Favorites dialog.
-• Fixed a bug where items temporarily disappeared from the list after deleting a category.
+• Added Favorites: save items and add them to your list in bulk.
+• Added Backup & Share: export data or share your list with another device.
+• Added Categories: group items by category with a category-based list view.
+• Added search bar, scroll bar, and close button to the Favorites dialog.
+• Bug fixes.
