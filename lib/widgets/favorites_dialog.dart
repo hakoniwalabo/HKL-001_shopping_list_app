@@ -148,6 +148,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                             data['price'] as int,
                             data['quantity'] as int,
                             data['sortOrder'] as int,
+                            categoryId: data['categoryId'] as int?,
                           );
                           await _load();
                         },

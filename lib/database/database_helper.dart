@@ -543,8 +543,9 @@ CREATE TABLE IF NOT EXISTS categories (
     String name,
     int price,
     int quantity,
-    int sortOrder,
-  ) async {
+    int sortOrder, {
+    int? categoryId,
+  }) async {
     final db = await database;
     await db.insert('favorites', {
       'name': name,
@@ -552,6 +553,7 @@ CREATE TABLE IF NOT EXISTS categories (
       'quantity': quantity,
       'sortOrder': sortOrder,
       'createdAt': DateTime.now().millisecondsSinceEpoch,
+      'categoryId': categoryId,
     });
   }
 
