@@ -617,6 +617,7 @@ class _EditFavoriteDialogState extends ConsumerState<_EditFavoriteDialog> {
     );
     if (confirmed != true || newName.isEmpty || !mounted) return;
     final id = await ref.read(categoryProvider.notifier).addCategory(newName);
+    if (!mounted) return;
     setState(() => _selectedCategoryId = id);
   }
 
