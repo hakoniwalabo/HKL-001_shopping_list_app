@@ -111,12 +111,36 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
       await ref.read(itemProvider.notifier).addItem(newItem);
       await DatabaseHelper.instance.upsertHistory(name);
       if (_addToFavorites) {
-        await DatabaseHelper.instance.insertFavorite(
-          name,
-          price,
-          quantity,
-          categoryId: _selectedCategoryId,
-        );
+        bool doInsert = true;
+        final exists = await DatabaseHelper.instance.favoriteNameExists(name);
+        if (exists && mounted) {
+          doInsert = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('既に登録されています'),
+                  content: Text('「$name」はよく買うものに登録済みです。追加しますか？'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('キャンセル'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('追加'),
+                    ),
+                  ],
+                ),
+              ) ??
+              false;
+        }
+        if (doInsert) {
+          await DatabaseHelper.instance.insertFavorite(
+            name,
+            price,
+            quantity,
+            categoryId: _selectedCategoryId,
+          );
+        }
       }
 
       if (!mounted) return;
@@ -126,7 +150,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
       }
       setState(() {
         _addedCount++;
-        _addToFavorites = false;
       });
       _nameCtrl.value = TextEditingValue.empty;
       _priceCtrl.text = '0';
@@ -286,7 +309,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
                   CheckboxListTile(
                     value: _addToFavorites,
                     onChanged: (v) => setState(() => _addToFavorites = v ?? false),
-                    title: const Text('よく買うものにも登録する'),
+                    title: const Text('よく買うものに登録'),
                     controlAffinity: ListTileControlAffinity.leading,
                     contentPadding: EdgeInsets.zero,
                     dense: true,

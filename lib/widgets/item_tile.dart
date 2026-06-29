@@ -77,6 +77,11 @@ class ItemTile extends StatelessWidget {
                           title: const Text('よく買うものに登録'),
                           onTap: () => Navigator.pop(context, 'favorite'),
                         ),
+                      ListTile(
+                        leading: const Icon(Icons.close),
+                        title: const Text('キャンセル'),
+                        onTap: () => Navigator.pop(context),
+                      ),
                     ],
                   ),
                 );

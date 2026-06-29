@@ -480,6 +480,12 @@ CREATE TABLE IF NOT EXISTS categories (
     await db.delete('favorites', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<bool> favoriteNameExists(String name) async {
+    final db = await database;
+    final rows = await db.query('favorites', where: 'name = ?', whereArgs: [name]);
+    return rows.isNotEmpty;
+  }
+
   Future<void> reorderFavorites(List<int> orderedIds) async {
     final db = await database;
     await db.transaction((txn) async {

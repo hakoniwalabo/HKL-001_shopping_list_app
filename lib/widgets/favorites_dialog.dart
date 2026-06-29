@@ -153,10 +153,19 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
               ),
             TextField(
               controller: _searchCtrl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: '検索',
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search),
                 isDense: true,
+                suffixIcon: _searchText.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchText = '');
+                        },
+                      ),
               ),
               onChanged: (v) => setState(() => _searchText = v),
             ),

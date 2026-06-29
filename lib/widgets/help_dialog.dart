@@ -14,7 +14,7 @@ class HelpDialog extends StatelessWidget {
             _HelpItem(
               icon: Icons.add_circle_outline,
               label: '商品を追加',
-              description: '右下の「追加」ボタンをタップ\n「追加」を押すと続けて入力できます（まとめて追加できます）。終わったら「閉じる」\n「よく買うものにも登録する」チェックで同時登録可能',
+              description: '右下の「追加」ボタンをタップ\n「追加」を押すと続けて入力できます（まとめて追加できます）。終わったら「閉じる」\n「よく買うものに登録」チェックで同時登録可能',
             ),
             _HelpItem(
               icon: Icons.edit_outlined,
@@ -62,9 +62,9 @@ class HelpDialog extends StatelessWidget {
               description: '商品を長押しするとメニューが表示されます\n「別タブに移動」で移動先リストを選択、「よく買うものに登録」でよく買うものに追加できます',
             ),
             _HelpItem(
-              icon: Icons.history,
-              label: '入力履歴から補完',
-              description: '商品名入力時に過去の入力履歴がサジェストされます',
+              icon: Icons.search,
+              label: '商品名の候補表示',
+              description: '商品名入力中、現在のリスト内にある商品名が候補として表示されます（参考表示のみ）',
             ),
             _HelpItem(
               icon: Icons.copy_outlined,

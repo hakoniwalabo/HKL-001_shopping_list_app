@@ -615,11 +615,30 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
         () => _showMoveToTabDialog(item);
 
     VoidCallback onAddToFavoritesFor(Item item) => () async {
+      final exists = await DatabaseHelper.instance.favoriteNameExists(item.name);
+      if (!mounted) return;
+      if (exists) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('既に登録されています'),
+            content: Text('「${item.name}」はよく買うものに登録済みです。追加しますか？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('キャンセル'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('追加'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+      }
       await DatabaseHelper.instance.insertFavorite(
-        item.name,
-        item.price,
-        item.quantity,
-        categoryId: item.categoryId,
+        item.name, item.price, item.quantity, categoryId: item.categoryId,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -917,15 +936,33 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                               onMoveToTab: (item) => () => _showMoveToTabDialog(item),
 
                               onAddToFavorites: (item) => () async {
-                                final messenger = ScaffoldMessenger.of(context);
+                                final exists = await DatabaseHelper.instance.favoriteNameExists(item.name);
+                                if (!context.mounted) return;
+                                if (exists) {
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('既に登録されています'),
+                                      content: Text('「${item.name}」はよく買うものに登録済みです。追加しますか？'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, false),
+                                          child: const Text('キャンセル'),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () => Navigator.pop(ctx, true),
+                                          child: const Text('追加'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmed != true || !context.mounted) return;
+                                }
                                 await DatabaseHelper.instance.insertFavorite(
-                                  item.name,
-                                  item.price,
-                                  item.quantity,
-                                  categoryId: item.categoryId,
+                                  item.name, item.price, item.quantity, categoryId: item.categoryId,
                                 );
-                                if (!mounted) return;
-                                messenger.showSnackBar(
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text('「${item.name}」をよく買うものに登録しました')),
                                 );
                               },
