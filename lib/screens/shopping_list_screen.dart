@@ -695,8 +695,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       );
     }
 
+    final categoryIds = categories.map((c) => c.id).toSet();
     final noCategory =
-        unchecked.where((i) => i.categoryId == null).toList();
+        unchecked.where((i) => i.categoryId == null || !categoryIds.contains(i.categoryId)).toList();
     if (noCategory.isNotEmpty) {
       result.add(
         ListSection(
@@ -798,6 +799,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                 case _OptionItem.categories:
                   if (!mounted) return;
                   await showCategoryManagementDialog(context);
+                  if (!mounted) return;
+                  await ref.read(itemProvider.notifier).changeList(currentListId);
               }
             },
             itemBuilder: (_) => [
