@@ -22,6 +22,11 @@ class UpgradeDialog extends ConsumerWidget {
         '端末を変えても「購入を復元」で再適用できます。',
       ),
       actions: [
+        // キャンセル
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('キャンセル'),
+        ),
         // 購入の復元
         TextButton(
           onPressed: () async {

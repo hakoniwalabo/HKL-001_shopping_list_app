@@ -339,6 +339,10 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
       ),
       actions: [
         TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('閉じる'),
+        ),
+        TextButton(
           onPressed: () async {
             await showDialog<void>(
               context: context,
