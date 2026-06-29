@@ -6,6 +6,7 @@ import '../database/database_helper.dart';
 import '../models/category.dart';
 import '../providers/category_provider.dart';
 import '../providers/item_provider.dart';
+import 'fields/item_name_field.dart';
 
 class FavoritesDialog extends ConsumerStatefulWidget {
   final int currentListId;
@@ -105,7 +106,15 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('よく買うもの'),
+      title: Row(
+        children: [
+          const Expanded(child: Text('よく買うもの')),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
       content: SizedBox(
         width: double.maxFinite,
         child: Column(
@@ -343,10 +352,6 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('閉じる'),
-        ),
-        TextButton(
           onPressed: () async {
             await showDialog<void>(
               context: context,
@@ -380,12 +385,31 @@ class _AddFavoriteDialogState extends ConsumerState<_AddFavoriteDialog> {
   final _priceCtrl = TextEditingController(text: '0');
   final _qtyCtrl = TextEditingController(text: '1');
   int? _selectedCategoryId;
+  final ScrollController _scrollCtrl = ScrollController();
+  final FocusNode _nameFocus = FocusNode();
+  List<String> _candidateNames = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCandidates();
+  }
+
+  Future<void> _loadCandidates() async {
+    final data = await DatabaseHelper.instance.getFavorites();
+    if (!mounted) return;
+    setState(() {
+      _candidateNames = data.map((f) => f['name'] as String).toList();
+    });
+  }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _priceCtrl.dispose();
     _qtyCtrl.dispose();
+    _scrollCtrl.dispose();
+    _nameFocus.dispose();
     super.dispose();
   }
 
@@ -422,18 +446,20 @@ class _AddFavoriteDialogState extends ConsumerState<_AddFavoriteDialog> {
     final categories = ref.watch(categoryProvider).value ?? <Category>[];
     return AlertDialog(
       title: const Text('よく買うものに登録'),
-      content: SingleChildScrollView(
-        child: Form(
+      content: Scrollbar(
+        controller: _scrollCtrl,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _scrollCtrl,
+          child: Form(
           key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextFormField(
+              ItemNameField(
                 controller: _nameCtrl,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: '商品名'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? '商品名を入力してください' : null,
+                candidateNames: _candidateNames,
+                focusNode: _nameFocus,
               ),
               TextFormField(
                 controller: _priceCtrl,
@@ -494,6 +520,7 @@ class _AddFavoriteDialogState extends ConsumerState<_AddFavoriteDialog> {
           ),
         ),
       ),
+    ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
