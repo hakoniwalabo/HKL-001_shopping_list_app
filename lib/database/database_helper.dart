@@ -56,15 +56,6 @@ CREATE TABLE items(
 ''');
 
     await db.execute('''
-CREATE TABLE item_history(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT UNIQUE,
-  count INTEGER,
-  lastUsed INTEGER
-)
-''');
-
-    await db.execute('''
 CREATE TABLE lists(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT,
@@ -101,15 +92,6 @@ CREATE TABLE categories (
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     // 不足しているテーブルを作成（IF NOT EXISTS で冪等）
-    await db.execute('''
-CREATE TABLE IF NOT EXISTS item_history(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT UNIQUE,
-  count INTEGER,
-  lastUsed INTEGER
-)
-''');
-
     await db.execute('''
 CREATE TABLE IF NOT EXISTS lists(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -304,48 +286,6 @@ CREATE TABLE IF NOT EXISTS categories (
 
       await batch.commit(noResult: true);
     });
-  }
-
-  // -------------------------
-  // 履歴
-  // -------------------------
-
-  Future<void> upsertHistory(String name) async {
-    final db = await instance.database;
-
-    final result = await db.query(
-      'item_history',
-      where: 'name = ?',
-      whereArgs: [name],
-    );
-
-    if (result.isEmpty) {
-      await db.insert('item_history', {
-        'name': name,
-        'count': 1,
-        'lastUsed': DateTime.now().millisecondsSinceEpoch,
-      });
-    } else {
-      final count = result.first['count'] as int;
-
-      await db.update(
-        'item_history',
-        {'count': count + 1, 'lastUsed': DateTime.now().millisecondsSinceEpoch},
-        where: 'name = ?',
-        whereArgs: [name],
-      );
-    }
-  }
-
-  Future<List<String>> getHistoryNames() async {
-    final db = await instance.database;
-
-    final result = await db.query(
-      'item_history',
-      orderBy: 'count DESC, lastUsed DESC',
-    );
-
-    return result.map((e) => e['name'] as String).toList();
   }
 
   Future<List<ShoppingList>> getLists() async {

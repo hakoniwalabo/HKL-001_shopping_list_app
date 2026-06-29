@@ -586,13 +586,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     required List<Item> unchecked,
     required List<Category> categories,
     required NumberFormat numberFormat,
-    required List<String> candidateNames,
   }) {
     VoidCallback onTapFor(Item item) => () {
       showAddItemDialog(
         context: context,
         currentListId: currentListId,
-        candidateNames: candidateNames,
         item: item,
       );
     };
@@ -734,10 +732,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   @override
   Widget build(BuildContext context) {
     final itemAsync = ref.watch(itemProvider);
-    final candidateNames = itemAsync.maybeWhen(
-      data: (items) => items.map((i) => i.name).toList(),
-      orElse: () => <String>[],
-    );
     const kHideAds = bool.fromEnvironment('HIDE_ADS');
     final isAdFree = kHideAds || ref.watch(purchaseProvider).maybeWhen(
       data: (v) => v,
@@ -922,7 +916,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                               unchecked: unchecked,
                               categories: categories,
                               numberFormat: numberFormat,
-                              candidateNames: candidateNames,
                             ),
 
                             const Divider(thickness: 1.5),
@@ -974,7 +967,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                                 showAddItemDialog(
                                   context: context,
                                   currentListId: currentListId,
-                                  candidateNames: candidateNames,
                                   item: item,
                                 );
                               },
@@ -1020,7 +1012,6 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           await showAddItemDialog(
             context: context,
             currentListId: currentListId,
-            candidateNames: candidateNames,
           );
         },
 

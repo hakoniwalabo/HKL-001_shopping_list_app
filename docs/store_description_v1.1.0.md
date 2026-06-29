@@ -23,7 +23,6 @@ Grocery list and shopping list app with checklist, categories, and favorites.
 ・チェックボックスで購入済みを管理します。購入済み商品の一括削除も可能です。
 ・ドラッグ&ドロップで商品の並び順を変えられます。
 ・未購入分と購入済み分の税込合計金額を画面に常時表示します。節約の目安としても活用できます。
-・商品名は入力履歴から補完（Autocomplete）されます。
 ・商品を別のリストへ移動する操作も対応しています。
 
 ---
@@ -83,7 +82,6 @@ A grocery list and shopping list app for managing multiple lists with tabs. Use 
 - Track purchased items with checkboxes. Bulk-delete all purchased items at once.
 - Reorder items by drag and drop.
 - Tax-included totals for both unpurchased and purchased items are always shown on screen — useful for staying on budget.
-- Item name autocomplete draws from your input history.
 - Move an item to a different list.
 
 ---

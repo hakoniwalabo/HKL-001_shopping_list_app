@@ -14,14 +14,12 @@ import 'fields/memo_field.dart';
 Future<void> showAddItemDialog({
   required BuildContext context,
   required int currentListId,
-  required List<String> candidateNames,
   Item? item,
 }) async {
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => _AddItemDialogContent(
       currentListId: currentListId,
-      candidateNames: candidateNames,
       item: item,
     ),
   );
@@ -31,12 +29,10 @@ enum _CloseAction { cancel, discard, add }
 
 class _AddItemDialogContent extends ConsumerStatefulWidget {
   final int currentListId;
-  final List<String> candidateNames;
   final Item? item;
 
   const _AddItemDialogContent({
     required this.currentListId,
-    required this.candidateNames,
     this.item,
   });
 
@@ -96,9 +92,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
           .copyWith(name: name, price: price, quantity: quantity, memo: memo)
           .copyWithNullableCategory(categoryId: _selectedCategoryId);
       await ref.read(itemProvider.notifier).updateItem(updatedItem);
-      if (name != item.name) {
-        await DatabaseHelper.instance.upsertHistory(name);
-      }
     } else {
       final newItem = Item(
         name: name,
@@ -109,7 +102,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
         categoryId: _selectedCategoryId,
       );
       await ref.read(itemProvider.notifier).addItem(newItem);
-      await DatabaseHelper.instance.upsertHistory(name);
       if (_addToFavorites) {
         bool doInsert = true;
         final exists = await DatabaseHelper.instance.favoriteNameExists(name);
@@ -225,6 +217,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
     );
     if (confirmed != true || newName.isEmpty || !mounted) return;
     final id = await ref.read(categoryProvider.notifier).addCategory(newName);
+    if (!mounted) return;
     setState(() => _selectedCategoryId = id);
   }
 
@@ -258,7 +251,6 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
                 ],
                 ItemNameField(
                   controller: _nameCtrl,
-                  candidateNames: widget.candidateNames,
                   focusNode: _nameFocus,
                 ),
                 const SizedBox(height: 12),

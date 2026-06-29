@@ -62,11 +62,6 @@ class HelpDialog extends StatelessWidget {
               description: '商品を長押しするとメニューが表示されます\n「別タブに移動」で移動先リストを選択、「よく買うものに登録」でよく買うものに追加できます',
             ),
             _HelpItem(
-              icon: Icons.search,
-              label: '商品名の候補表示',
-              description: '商品名入力中、現在のリスト内にある商品名が候補として表示されます（参考表示のみ）',
-            ),
-            _HelpItem(
               icon: Icons.copy_outlined,
               label: 'リストを複製',
               description: 'AppBar右上の「複製」ボタン\n全商品をコピーした新しいリストを作成します（チェックはリセット）',

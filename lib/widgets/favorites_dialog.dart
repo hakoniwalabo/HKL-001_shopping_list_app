@@ -388,20 +388,10 @@ class _AddFavoriteDialogState extends ConsumerState<_AddFavoriteDialog> {
   int? _selectedCategoryId;
   final ScrollController _scrollCtrl = ScrollController();
   final FocusNode _nameFocus = FocusNode();
-  List<String> _candidateNames = [];
 
   @override
   void initState() {
     super.initState();
-    _loadCandidates();
-  }
-
-  Future<void> _loadCandidates() async {
-    final data = await DatabaseHelper.instance.getFavorites();
-    if (!mounted) return;
-    setState(() {
-      _candidateNames = data.map((f) => f['name'] as String).toList();
-    });
   }
 
   @override
@@ -459,7 +449,6 @@ class _AddFavoriteDialogState extends ConsumerState<_AddFavoriteDialog> {
             children: [
               ItemNameField(
                 controller: _nameCtrl,
-                candidateNames: _candidateNames,
                 focusNode: _nameFocus,
               ),
               TextFormField(
