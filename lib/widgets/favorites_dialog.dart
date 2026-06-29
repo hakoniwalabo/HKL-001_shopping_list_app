@@ -187,24 +187,102 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                 child: Text('まだ登録されていません'),
               )
             else if (_searchText.isEmpty)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
-                child: Scrollbar(
-                  controller: _scrollCtrl,
-                  thumbVisibility: true,
-                  child: ReorderableListView.builder(
-                    scrollController: _scrollCtrl,
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  child: Scrollbar(
+                    controller: _scrollCtrl,
+                    thumbVisibility: true,
+                    child: ReorderableListView.builder(
+                      scrollController: _scrollCtrl,
+                      shrinkWrap: true,
+                      itemCount: _favorites.length,
+                      onReorderItem: _onReorderItem,
+                      itemBuilder: (_, i) {
+                        final fav = _favorites[i];
+                        final id = fav['id'] as int;
+                        final name = fav['name'] as String;
+                        final price = fav['price'] as int;
+                        final qty = fav['quantity'] as int;
+                        final subtitle =
+                            price > 0 ? '¥$price × $qty' : '数量: $qty';
+                        return Dismissible(
+                          key: ValueKey(id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            color: Colors.red,
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 16),
+                            child: const Icon(
+                              Icons.delete,
+                              color: Colors.white,
+                            ),
+                          ),
+                          onDismissed: (_) async {
+                            _pendingUndoFavorite = Map.from(fav);
+                            _selectedIds.remove(id);
+                            await DatabaseHelper.instance.deleteFavorite(id);
+                            await _load();
+                            if (!mounted) return;
+                            _undoTimer?.cancel();
+                            _undoTimer = Timer(const Duration(seconds: 5), () {
+                              if (!mounted) return;
+                              setState(() => _pendingUndoFavorite = null);
+                            });
+                          },
+                          child: ListTile(
+                            leading: Checkbox(
+                              value: _selectedIds.contains(id),
+                              onChanged: (v) {
+                                setState(() {
+                                  if (v == true) {
+                                    _selectedIds.add(id);
+                                  } else {
+                                    _selectedIds.remove(id);
+                                  }
+                                });
+                              },
+                            ),
+                            title: Text(name),
+                            subtitle: Text(subtitle),
+                            onTap: () async {
+                              await showDialog<void>(
+                                context: context,
+                                builder: (_) => _EditFavoriteDialog(
+                                  id: id,
+                                  initialName: name,
+                                  initialPrice: price,
+                                  initialQuantity: qty,
+                                  initialCategoryId: fav['categoryId'] as int?,
+                                ),
+                              );
+                              await _load();
+                            },
+                            trailing: ReorderableDragStartListener(
+                              index: i,
+                              child: const Icon(Icons.drag_handle),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              )
+            else
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  child: ListView.builder(
                     shrinkWrap: true,
-                    itemCount: _favorites.length,
-                    onReorderItem: _onReorderItem,
+                    itemCount: _filteredFavorites.length,
                     itemBuilder: (_, i) {
-                      final fav = _favorites[i];
+                      final fav = _filteredFavorites[i];
                       final id = fav['id'] as int;
                       final name = fav['name'] as String;
                       final price = fav['price'] as int;
                       final qty = fav['quantity'] as int;
-                      final subtitle =
-                          price > 0 ? '¥$price × $qty' : '数量: $qty';
+                      final subtitle = price > 0 ? '¥$price × $qty' : '数量: $qty';
                       return Dismissible(
                         key: ValueKey(id),
                         direction: DismissDirection.endToStart,
@@ -212,10 +290,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                           color: Colors.red,
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.only(right: 16),
-                          child: const Icon(
-                            Icons.delete,
-                            color: Colors.white,
-                          ),
+                          child: const Icon(Icons.delete, color: Colors.white),
                         ),
                         onDismissed: (_) async {
                           _pendingUndoFavorite = Map.from(fav);
@@ -257,81 +332,10 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                             );
                             await _load();
                           },
-                          trailing: ReorderableDragStartListener(
-                            index: i,
-                            child: const Icon(Icons.drag_handle),
-                          ),
                         ),
                       );
                     },
                   ),
-                ),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _filteredFavorites.length,
-                  itemBuilder: (_, i) {
-                    final fav = _filteredFavorites[i];
-                    final id = fav['id'] as int;
-                    final name = fav['name'] as String;
-                    final price = fav['price'] as int;
-                    final qty = fav['quantity'] as int;
-                    final subtitle = price > 0 ? '¥$price × $qty' : '数量: $qty';
-                    return Dismissible(
-                      key: ValueKey(id),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        color: Colors.red,
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 16),
-                        child: const Icon(Icons.delete, color: Colors.white),
-                      ),
-                      onDismissed: (_) async {
-                        _pendingUndoFavorite = Map.from(fav);
-                        _selectedIds.remove(id);
-                        await DatabaseHelper.instance.deleteFavorite(id);
-                        await _load();
-                        if (!mounted) return;
-                        _undoTimer?.cancel();
-                        _undoTimer = Timer(const Duration(seconds: 5), () {
-                          if (!mounted) return;
-                          setState(() => _pendingUndoFavorite = null);
-                        });
-                      },
-                      child: ListTile(
-                        leading: Checkbox(
-                          value: _selectedIds.contains(id),
-                          onChanged: (v) {
-                            setState(() {
-                              if (v == true) {
-                                _selectedIds.add(id);
-                              } else {
-                                _selectedIds.remove(id);
-                              }
-                            });
-                          },
-                        ),
-                        title: Text(name),
-                        subtitle: Text(subtitle),
-                        onTap: () async {
-                          await showDialog<void>(
-                            context: context,
-                            builder: (_) => _EditFavoriteDialog(
-                              id: id,
-                              initialName: name,
-                              initialPrice: price,
-                              initialQuantity: qty,
-                              initialCategoryId: fav['categoryId'] as int?,
-                            ),
-                          );
-                          await _load();
-                        },
-                      ),
-                    );
-                  },
                 ),
               ),
           ],
