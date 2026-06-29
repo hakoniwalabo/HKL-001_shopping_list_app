@@ -592,6 +592,34 @@ class _EditFavoriteDialogState extends ConsumerState<_EditFavoriteDialog> {
     super.dispose();
   }
 
+  Future<void> _showNewCategoryDialog(List<Category> categories) async {
+    String newName = '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('カテゴリを追加'),
+        content: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'カテゴリ名'),
+          onChanged: (v) => newName = v.trim(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('追加'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || newName.isEmpty || !mounted) return;
+    final id = await ref.read(categoryProvider.notifier).addCategory(newName);
+    setState(() => _selectedCategoryId = id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final categories = ref.watch(categoryProvider).value ?? <Category>[];
@@ -641,20 +669,32 @@ class _EditFavoriteDialogState extends ConsumerState<_EditFavoriteDialog> {
                 },
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<int?>(
-                decoration: const InputDecoration(
-                  labelText: 'カテゴリ（任意）',
-                  border: OutlineInputBorder(),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-                initialValue: _selectedCategoryId,
-                items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('なし')),
-                  ...categories.map((c) => DropdownMenuItem<int?>(
-                      value: c.id, child: Text(c.name))),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int?>(
+                      decoration: const InputDecoration(
+                        labelText: 'カテゴリ（任意）',
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      initialValue: _selectedCategoryId,
+                      items: [
+                        const DropdownMenuItem<int?>(value: null, child: Text('なし')),
+                        ...categories.map((c) => DropdownMenuItem<int?>(
+                            value: c.id, child: Text(c.name))),
+                      ],
+                      onChanged: (v) => setState(() => _selectedCategoryId = v),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: '新規カテゴリ',
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: () => _showNewCategoryDialog(categories),
+                  ),
                 ],
-                onChanged: (v) => setState(() => _selectedCategoryId = v),
               ),
             ],
           ),
