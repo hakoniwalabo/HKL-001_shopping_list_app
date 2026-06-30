@@ -270,7 +270,20 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       if (result == null) return;
       await loadLists();
       if (!mounted) return;
-      await ref.read(itemProvider.notifier).changeList(currentListId);
+      ref.invalidate(categoryProvider);
+      final newListId = result.firstNewListId;
+      if (newListId != null) {
+        final newIndex = shoppingLists.indexWhere((e) => e.id == newListId);
+        if (newIndex != -1) {
+          _tabController?.animateTo(newIndex);
+          await changeList(newListId);
+        } else {
+          await changeList(currentListId);
+        }
+      } else {
+        await changeList(currentListId);
+      }
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
           content: Text(

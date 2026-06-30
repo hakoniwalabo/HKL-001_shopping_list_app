@@ -7,11 +7,13 @@ class ImportResult {
   final int listCount;
   final int itemCount;
   final int favoriteCount;
+  final int? firstNewListId;
 
   const ImportResult({
     required this.listCount,
     required this.itemCount,
     required this.favoriteCount,
+    this.firstNewListId,
   });
 }
 
@@ -671,6 +673,7 @@ CREATE TABLE IF NOT EXISTS categories (
       listCount: incomingLists.length,
       itemCount: incomingItems.length,
       favoriteCount: insertedFavCount,
+      firstNewListId: listIdMap.isNotEmpty ? listIdMap.values.first : null,
     );
   }
 
