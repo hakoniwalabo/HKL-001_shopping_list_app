@@ -40,7 +40,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
   TabController? _tabController;
   final ScrollController _listScrollCtrl = ScrollController();
 
-  int currentListId = 1;
+  int currentListId = -1;
   bool _isChangingTab = false;
   final numberFormat = NumberFormat('#,###');
 

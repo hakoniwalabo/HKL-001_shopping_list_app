@@ -605,6 +605,14 @@ CREATE TABLE IF NOT EXISTS categories (
       }
 
       // lists INSERT
+      // 既存リスト中の最大 createdAt を取得して、インポートリストが必ず右端に並ぶようにする
+      final maxCreatedAtResult = await txn.rawQuery(
+        'SELECT MAX(createdAt) as maxAt FROM lists',
+      );
+      final baseCreatedAt =
+          ((maxCreatedAtResult.first['maxAt'] as int?) ?? DateTime.now().millisecondsSinceEpoch) + 1;
+      int listInsertIndex = 0;
+
       for (final list in incomingLists) {
         final oldId = (list['id'] as num).toInt();
         final resolvedName =
@@ -613,8 +621,9 @@ CREATE TABLE IF NOT EXISTS categories (
 
         final newId = await txn.insert('lists', {
           'name': resolvedName,
-          'createdAt': list['createdAt'],
+          'createdAt': baseCreatedAt + listInsertIndex,
         });
+        listInsertIndex++;
         listIdMap[oldId] = newId;
       }
 
