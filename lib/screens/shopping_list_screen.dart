@@ -86,6 +86,11 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     setState(() {
       shoppingLists = data;
     });
+
+    if (!mounted) return;
+    if (data.isNotEmpty) {
+      await ref.read(itemProvider.notifier).changeList(currentListId);
+    }
   }
 
   Future<void> changeList(int listId) async {
