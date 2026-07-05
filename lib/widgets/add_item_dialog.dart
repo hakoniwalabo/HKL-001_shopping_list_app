@@ -14,12 +14,14 @@ import 'fields/memo_field.dart';
 Future<void> showAddItemDialog({
   required BuildContext context,
   required int currentListId,
+  required List<String> candidateNames,
   Item? item,
 }) async {
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => _AddItemDialogContent(
       currentListId: currentListId,
+      candidateNames: candidateNames,
       item: item,
     ),
   );
@@ -29,10 +31,12 @@ enum _CloseAction { cancel, discard, add }
 
 class _AddItemDialogContent extends ConsumerStatefulWidget {
   final int currentListId;
+  final List<String> candidateNames;
   final Item? item;
 
   const _AddItemDialogContent({
     required this.currentListId,
+    required this.candidateNames,
     this.item,
   });
 
@@ -252,6 +256,7 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
                 ItemNameField(
                   controller: _nameCtrl,
                   focusNode: _nameFocus,
+                  candidateNames: widget.candidateNames,
                 ),
                 const SizedBox(height: 12),
                 PriceField(controller: _priceCtrl),
