@@ -20,7 +20,7 @@
 | 項目 | 内容 |
 |------|------|
 | リスト共有の単位 | 現在表示中のリスト1件 |
-| リスト共有のファイル形式 | 既存 version:1 バックアップ形式（`lists`=1件・`items`=該当商品・`favorites`=空） |
+| リスト共有のファイル形式 | 既存バックアップ形式（`lists`=1件・`items`=該当商品・`favorites`=空。2026-07-05 追記：2026-06-22 のカテゴリ機能追加以降は version:2、使用カテゴリのみの `categories` を含む） |
 | 共有時の購入済アイテム | **含めない（除外）** — 未購入のものだけを送る |
 | 受信（取り込み）方法 | 既存の読み込み機能に統合（別メニューを増やさない） |
 | バックアップ保存先 | タップ後にダイアログで「共有」「端末に保存」を選択 |
@@ -61,16 +61,20 @@ shopping_list_screen.dart
 
 ### 4.1 リスト共有ファイル
 
-既存 version:1 バックアップ形式をそのまま使う（受信側の `importData` を無改修で流用するため）。
+既存バックアップ形式をそのまま使う（受信側の `importData` を無改修で流用するため）。
 
 - `lists` … 共有対象の1リストのみ
 - `items` … そのリストの**未購入（isChecked=0）アイテムのみ**
 - `favorites` … 空配列 `[]`
+- `categories` … 共有されるアイテムが実際に使用しているカテゴリのみ（2026-07-05 追記：下記参照）
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "exportedAt": 1718500000000,
+  "categories": [
+    { "id": 3, "name": "食品", "sortOrder": 0, "createdAt": 1700000003000 }
+  ],
   "lists": [
     { "id": 1, "name": "週末の買い物", "createdAt": 1700000000000 }
   ],
@@ -78,12 +82,14 @@ shopping_list_screen.dart
     {
       "id": 10, "name": "牛乳", "price": 198, "isChecked": 0,
       "createdAt": 1700000001000, "sortOrder": 0,
-      "quantity": 2, "memo": "", "listId": 1
+      "quantity": 2, "memo": "", "listId": 1, "categoryId": 3
     }
   ],
   "favorites": []
 }
 ```
+
+（2026-07-05 追記：本設計書作成時点（2026-06-16）では version:1・`categories` 無しの形式だったが、2026-06-22 のカテゴリ機能追加（commit `3faa0a1`・`ca4fecc`）で `shareList()` も共有アイテムの `categoryId` から使用カテゴリを集めて `categories` に含めるようになり、リスト共有ファイルも version:2 となった。カテゴリ機能自体の詳細は `2026-06-22-category-design.md` を参照）
 
 **ファイル名**: `shoppinglist_<リスト名>_YYYYMMDD.json`
 （リスト名はファイル名に使えない文字をサニタイズ。空になる場合は `list` を代替）
@@ -102,7 +108,7 @@ shopping_list_screen.dart
 ⋮ メニュー →「リストを共有（読み込み用）」タップ
 → BackupService.shareList(listId)
     → 対象リストと、その未購入アイテムのみを取得
-    → version:1 形式（favorites=[]）で JSON 文字列を生成
+    → version:2 形式（favorites=[]、使用カテゴリのみの categories を含む）で JSON 文字列を生成（2026-07-05 追記：2026-06-22 のカテゴリ機能追加で version:1→2 に変更。詳細は 4.1 節参照）
     → getTemporaryDirectory() に shoppinglist_<名>_YYYYMMDD.json として保存
     → Share.shareXFiles([XFile(path)]) で共有シート表示
     → 後始末で一時ファイル削除
@@ -140,10 +146,16 @@ shopping_list_screen.dart
     → parseAndValidate（version・必須キー存在確認）
     → DatabaseHelper.importData(data) でマージ INSERT
         → lists: 同名は連番付与（resolveListName）→ 旧ID→新ID マップ
+          （createdAt はバックアップの値を使わず、既存リストの MAX(createdAt)+1 から採番し直す）
         → items: listId を新 ID に差し替えて INSERT
         → favorites: MAX(sortOrder)+1 から採番（リスト共有ファイルは空なので追加なし）
+        → 既存リスト数＋インポート後のリスト数が10件を超える場合は中断（6節参照）
+    → loadLists() → ref.invalidate(categoryProvider) → 新規追加された最初のリストへ自動タブ切り替え
+      （見つからない場合は現在のリストのまま再読込）
 → SnackBar「Xリスト・Y件の商品・Z件のよく買うものを追加しました」
 ```
+
+（2026-07-05 追記：本フローはバックアップ・共有リストいずれのファイルでも同一の `BackupService.import()` / `DatabaseHelper.importData()` 経路を通るため、`2026-06-13-backup-design.md` の 5.2 節で追記した「10件上限チェック」「favorites の name 重複スキップ」「categoryProvider 再取得＋新規リストへの自動タブ切り替え」（commit `db0ff87`・`64c0b6a`・`020c8d3`）は本機能のリスト共有ファイル読み込みにもそのまま適用される。詳細な挙動はそちらを参照）
 
 ---
 
@@ -205,18 +217,30 @@ shopping_list_screen.dart
 
 ```dart
 class BackupService {
-  /// 全データ（または指定リストのみ）を version:1 JSON 文字列に変換する。
-  /// onlyListId 指定時はそのリストのみ。excludeChecked=true で購入済を除外。
-  static Future<String> _serialize({int? onlyListId, bool excludeChecked = false});
+  /// エクスポート Map（version:2 形式）を組み立てる純粋関数。
+  /// categories / lists / items / favorites を呼び出し側が用意し、
+  /// export() / saveToDevice() / shareList() の全てがこれを呼ぶ。
+  static Map<String, dynamic> buildExportMap({
+    required List<Map<String, dynamic>> categories,
+    required List<Map<String, dynamic>> lists,
+    required List<Map<String, dynamic>> items,
+    required List<Map<String, dynamic>> favorites,
+    required int exportedAt,
+  });
 
-  /// 全データを共有シートに渡す（既存）。
+  /// 全データ（categories・lists・items・favorites）を DB から取得し、
+  /// buildExportMap() で version:2 JSON 文字列に変換する（private）。
+  static Future<String> _buildFullBackupJson();
+
+  /// 全データを共有シートに渡す（既存）。内部で _buildFullBackupJson() を使う。
   static Future<void> export();
 
   /// 全データを端末に保存する（file_picker saveFile / SAF）。
-  /// 保存した場合 true、キャンセルは false。
+  /// 内部で _buildFullBackupJson() を使う。保存した場合 true、キャンセルは false。
   static Future<bool> saveToDevice();
 
-  /// 指定リスト1件を未購入アイテムのみで共有シートに渡す。
+  /// 指定リスト1件・未購入アイテムのみ・そのアイテムが使用しているカテゴリのみを集めて
+  /// buildExportMap(favorites: const []) で JSON 化し、共有シートに渡す。
   /// 共有できる商品が無い場合は false を返す。
   static Future<bool> shareList(int listId, String listName);
 
@@ -228,8 +252,8 @@ class BackupService {
 }
 ```
 
-- `export()` / `saveToDevice()` / `shareList()` は `_serialize()` を再利用し、JSON 構築ロジックを一本化する。
-- `shareList()` は `_serialize(onlyListId: listId, excludeChecked: true)` を使う。
+- （2026-07-05 追記：当初案では private な `_serialize({onlyListId, excludeChecked})` に一本化する設計だったが、実装では commit `27b11b0` で public かつ純粋関数の `buildExportMap()` を切り出し、DB 取得を担う `_buildFullBackupJson()`（`export()` / `saveToDevice()` が使用）と、`shareList()` 内で対象リスト・未購入アイテム・使用カテゴリのみを個別に集めて `buildExportMap()` を直接呼ぶ経路とに分かれる形へ commit `83ab4ce` でリファクタリングされた。両 commit とも本設計書と同日 2026-06-16 のため、後日のドリフトではなく実装時点での設計変更に当たる）
+- `export()` / `saveToDevice()` は `_buildFullBackupJson()` 経由で全データを、`shareList()` は自前で集めた対象リストのデータのみを、それぞれ `buildExportMap()` に渡す。
 
 ---
 

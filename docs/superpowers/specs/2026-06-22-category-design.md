@@ -124,6 +124,8 @@ Migration 方針：
 
 直接登録・編集ダイアログにも同様のカテゴリフィールドを追加する。よく買うものをリストに追加するとき、categoryId も items に引き継ぐ。
 
+（2026-07-05 追記：カテゴリのドロップダウン自体は commit ca4fecc（2026-06-22、本設計書と同日）で `_AddFavoriteDialog`・`_EditFavoriteDialog` の両方に追加されたが、「＋新規カテゴリ」ボタン（インラインでカテゴリを作成する `IconButton`＋`_showNewCategoryDialog()`）は当初 `_AddFavoriteDialog` にのみ実装されており、`_EditFavoriteDialog` への追加は1週間後の commit e38909d（2026-06-29）まで漏れていた。現在は両ダイアログで同一UIに統一済み。）
+
 ---
 
 ## 5. DatabaseHelper 追加メソッド
@@ -206,6 +208,12 @@ AlertDialog「カテゴリを管理」
 
 version:2 形式で出力する。categories には、共有対象アイテムが使用しているカテゴリのみを含める。
 
+### インポート時のカテゴリ処理（2026-07-05 追記：`importData()` の実装詳細が未記載だったため補足）
+
+- 取り込む categories は `name` で既存カテゴリと重複チェックする。同名カテゴリが既に存在する場合は新規作成せず、既存の id を使う
+- 重複しないカテゴリのみ新規 INSERT する。sortOrder は既存カテゴリの `MAX(sortOrder)+1` から連番で採番する
+- 上記の対応関係から旧id→新id の `categoryIdMap` を作成し、取り込む items・favorites の categoryId をこのマップで新idに置き換えてから INSERT する（マッピングが無い＝対応するカテゴリが取り込まれなかった場合は categoryId を null にする）
+
 ---
 
 ## 9. 変更ファイル一覧
@@ -216,6 +224,7 @@ version:2 形式で出力する。categories には、共有対象アイテム�
 | `models/item.dart` | categoryId フィールド追加（int? nullable） |
 | `models/category.dart` | 新規作成（Category モデル） |
 | `providers/item_provider.dart` | カテゴリ別セクション分け用のデータ整形処理追加 |
+| `providers/category_provider.dart` | 新規作成（`CategoryNotifier`／`categoryProvider`。`AsyncNotifier<List<Category>>` で categories を保持し、`addCategory()` は作成した id を返してダイアログの選択状態に反映する）（2026-07-05 追記：本ファイルの初版で列挙漏れがあったため追加。commit 9305005 で本設計書と同日に実装済み） |
 | `screens/shopping_list_screen.dart` | 未購入セクションをカテゴリ別に分割表示 |
 | `widgets/add_item_dialog.dart` | カテゴリ選択フィールド・新規カテゴリ作成ダイアログ追加 |
 | `widgets/category_management_dialog.dart` | 新規作成（カテゴリ管理ダイアログ） |

@@ -85,7 +85,9 @@ shopping_list_screen.dart
 
 **設計意図:**
 - `version` フィールドで将来のフォーマット変更に対応
-- `lists.id` / `items.listId` はバックアップ内でのみ有効な仮 ID。インポート時に DB の実際の新 ID にマッピングし直す
+- `lists.id` / `items.listId` はバックアップ内でのみ有効な仮 ID。インポート時に DB の実際の新 ID にマッピングし直す（インポート時、`lists.createdAt` はバックアップの値をそのまま使わず、既存リストの `MAX(createdAt)+1` を起点に採番し直す。理由は 9 節を参照）
+
+> （2026-07-05 追記：2026-06-22 のカテゴリ機能追加により version:2 に更新され、`categories` フィールドが追加されている。詳細は `2026-06-22-category-design.md` を参照）
 
 ---
 
@@ -113,11 +115,22 @@ shopping_list_screen.dart
     → ファイル読み込み・JSON パース
     → バリデーション（version・必須キー存在確認）
     → DatabaseHelper.importData(data) でマージ INSERT
+        → 追加前チェック：既存リスト数＋インポートするリスト数が10件を超える場合は
+          FormatException('list_limit_exceeded') を投げて中断（2026-07-05 追記：db0ff87 で追加。10-item list limit check）
         → lists: 同名リストに連番付与（「リスト名 (2)」）→ INSERT → 旧ID→新ID マップ作成
         → items: listId を新 ID に差し替えて INSERT（sortOrder はそのまま）
-        → favorites: 現在の MAX(sortOrder)+1 から採番して INSERT
+        → favorites: 現在の MAX(sortOrder)+1 から採番して INSERT（同名の既存お気に入りはスキップ・重複防止）
+    → loadLists() でタブ一覧を再取得
+    → ref.invalidate(categoryProvider) でカテゴリ一覧を再取得（インポートしたカテゴリを即反映）
+    → ImportResult.firstNewListId（インポートで新規作成された最初のリストID）があれば、
+      そのタブへ自動切り替え（_tabController?.animateTo + changeList）。
+      見つからない／新規リストが無い場合は現在のリストのまま changeList で再読込
 → SnackBar「Xリスト・Y件の商品・Z件のよく買うものを追加しました」
 ```
+
+（2026-07-05 追記：上記の「10件上限チェック」「favorites の name 重複スキップ」「loadLists 後の categoryProvider 再取得＋新規リストへの自動タブ切り替え」は、それぞれ commit `db0ff87`（2026-06-14）・`64c0b6a`（2026-06-30）で追加された挙動。当初の設計にはなく、本節を実装に合わせて更新した）
+
+> 関連する起動時の変更（2026-07-05 追記）：commit `020c8d3` で `_ShoppingListScreenState.currentListId` の初期値が `1` から `-1` に変更された。存在しないリストIDを初期値にすることで、起動時は常に `loadLists()` の「該当IDが無ければ先頭リストを選択する」ロジックが働き、どのリストIDが存在していても必ず左端のタブが表示されるようになっている。
 
 ---
 
@@ -128,6 +141,7 @@ shopping_list_screen.dart
 | ファイル選択キャンセル | 何もしない（静かに終了） |
 | JSON パース失敗 | SnackBar「読み込めないファイルです」 |
 | version 不一致（version ≠ 1） | SnackBar「対応していないバックアップ形式です」 |
+| 10件上限超過（既存＋インポート後のリスト数 > 10） | SnackBar「リストが上限（10件）に達しているため読み込めません」（2026-07-05 追記：commit `db0ff87` で追加された `importData()` のチェック。当初の設計に無かったため追記） |
 | DB 書き込み失敗 | SnackBar「読み込みに失敗しました」 |
 
 ---
@@ -171,6 +185,7 @@ class ImportResult {
   final int listCount;
   final int itemCount;
   final int favoriteCount;
+  final int? firstNewListId; // （2026-07-05 追記：commit 64c0b6a で追加。インポート後に自動でタブ切り替えするための、新規作成された最初の lists.id）
 }
 ```
 
@@ -180,13 +195,22 @@ class ImportResult {
 
 ```dart
 Future<ImportResult> importData(Map<String, dynamic> data) async {
+  // 0. 追加前チェック：既存リスト数 + インポートするリスト数 > 10 の場合は
+  //    FormatException('list_limit_exceeded') を投げて中断する
+  //    （2026-07-05 追記：commit db0ff87 で追加。当初の設計に無かった）
   // 1. lists INSERT + 旧ID→新ID マップ作成
   //    同名リストは連番付与（duplicateList と同じロジック）
+  //    createdAt はバックアップの値を使わず、既存リストの MAX(createdAt)+1 を起点に
+  //    連番採番し直す（インポートしたリストが必ずタブの右端に並ぶようにするため）
+  //    （2026-07-05 追記：commit 020c8d3 で変更。当初はバックアップの createdAt をそのまま使う想定だった）
   // 2. items INSERT（listId をマップで差し替え）
-  // 3. favorites INSERT（sortOrder を MAX+1 から採番）
-  // 4. ImportResult を返す
+  // 3. favorites INSERT（sortOrder を MAX+1 から採番。name が既存お気に入りと重複する場合はスキップ
+  //    （2026-07-05 追記：commit db0ff87 で追加。favoriteCount は実際に INSERT された件数を返す）
+  // 4. ImportResult を返す（firstNewListId に新規作成された最初の lists.id を含む）
 }
 ```
+
+> （2026-07-05 追記：`list['id']` / `item['listId']` 等、外部 JSON 由来の整数値は `as int` ではなく `(value as num).toInt()` でキャストする。JSON の数値が double として届く場合があるための対応で、Rules.md の共通ルールに準拠している）
 
 ---
 
