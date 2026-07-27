@@ -18,7 +18,7 @@ import '../widgets/empty_state_view.dart';
 import '../widgets/list_management_buttons.dart';
 import '../widgets/list_section.dart';
 import '../widgets/list_tab_bar.dart';
-import '../widgets/favorites_dialog.dart';
+import 'favorites_screen.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/total_summary.dart';
 import '../widgets/upgrade_dialog.dart';
@@ -776,10 +776,12 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
             tooltip: 'よく買うものから追加',
             onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
-              final count = await showDialog<int>(
-                context: context,
-                builder: (_) =>
-                    FavoritesDialog(currentListId: currentListId),
+              final count = await Navigator.push<int>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      FavoritesScreen(currentListId: currentListId),
+                ),
               );
               if (!mounted) return;
               if (count != null && count > 0) {

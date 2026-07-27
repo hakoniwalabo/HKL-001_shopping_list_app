@@ -2,28 +2,30 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../database/database_helper.dart';
 import '../models/category.dart';
 import '../providers/category_provider.dart';
 import '../providers/item_provider.dart';
-import 'fields/item_name_field.dart';
+import '../utils/favorites_section_helper.dart';
+import '../widgets/fields/item_name_field.dart';
 
-class FavoritesDialog extends ConsumerStatefulWidget {
+class FavoritesScreen extends ConsumerStatefulWidget {
   final int currentListId;
 
-  const FavoritesDialog({super.key, required this.currentListId});
+  const FavoritesScreen({super.key, required this.currentListId});
 
   @override
-  ConsumerState<FavoritesDialog> createState() => _FavoritesDialogState();
+  ConsumerState<FavoritesScreen> createState() => _FavoritesScreenState();
 }
 
-class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
+class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   List<Map<String, dynamic>> _favorites = [];
   final Set<int> _selectedIds = {};
   Map<String, dynamic>? _pendingUndoFavorite;
   Timer? _undoTimer;
-  final ScrollController _scrollCtrl = ScrollController();
   final TextEditingController _searchCtrl = TextEditingController();
+  final ScrollController _bodyScrollCtrl = ScrollController();
   String _searchText = '';
 
   @override
@@ -36,7 +38,7 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
   void dispose() {
     _undoTimer?.cancel();
     _searchCtrl.dispose();
-    _scrollCtrl.dispose();
+    _bodyScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -51,6 +53,8 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
     });
   }
 
+  // グローバルな favorites 全体リスト上の oldIndex/newIndex を受け取り、
+  // DB へ永続化する。
   Future<void> _onReorderItem(int oldIndex, int newIndex) async {
     final list = [..._favorites];
     final item = list.removeAt(oldIndex);
@@ -63,6 +67,28 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
     } catch (_) {
       await _load();
     }
+  }
+
+  // カテゴリセクション内の並べ替え。セクション内 index をグローバル位置に変換してから
+  // _onReorderItem に渡す（shopping_list_screen.dart の _buildCategorySections /
+  // item_provider.dart の reorderUncheckedItems と同じパターン）。
+  Future<void> _onReorderInSection(
+    List<Map<String, dynamic>> sectionItems,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final globalOld = resolveGlobalFavoriteIndex(
+      allFavorites: _favorites,
+      sectionItems: sectionItems,
+      indexInSection: oldIndex,
+    );
+    final globalNew = resolveGlobalFavoriteIndex(
+      allFavorites: _favorites,
+      sectionItems: sectionItems,
+      indexInSection: newIndex,
+    );
+    if (globalOld == -1 || globalNew == -1) return;
+    await _onReorderItem(globalOld, globalNew);
   }
 
   Future<void> _addToList() async {
@@ -103,61 +129,199 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Row(
+  Future<void> _deleteFavorite(Map<String, dynamic> fav) async {
+    final id = fav['id'] as int;
+    _pendingUndoFavorite = Map.from(fav);
+    _selectedIds.remove(id);
+    await DatabaseHelper.instance.deleteFavorite(id);
+    await _load();
+    if (!mounted) return;
+    _undoTimer?.cancel();
+    _undoTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      setState(() => _pendingUndoFavorite = null);
+    });
+  }
+
+  Future<void> _editFavorite(Map<String, dynamic> fav) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _EditFavoriteDialog(
+        id: fav['id'] as int,
+        initialName: fav['name'] as String,
+        initialPrice: fav['price'] as int,
+        initialQuantity: fav['quantity'] as int,
+        initialCategoryId: fav['categoryId'] as int?,
+      ),
+    );
+    await _load();
+  }
+
+  Widget _buildTile(Map<String, dynamic> fav, {int? dragIndex}) {
+    final id = fav['id'] as int;
+    final name = fav['name'] as String;
+    final price = fav['price'] as int;
+    final qty = fav['quantity'] as int;
+    final subtitle = price > 0 ? '¥$price × $qty' : '数量: $qty';
+    return Dismissible(
+      key: ValueKey(id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        color: Colors.red,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 16),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      onDismissed: (_) => _deleteFavorite(fav),
+      child: ListTile(
+        leading: Checkbox(
+          value: _selectedIds.contains(id),
+          onChanged: (v) {
+            setState(() {
+              if (v == true) {
+                _selectedIds.add(id);
+              } else {
+                _selectedIds.remove(id);
+              }
+            });
+          },
+        ),
+        title: Text(name),
+        subtitle: Text(subtitle),
+        onTap: () => _editFavorite(fav),
+        trailing: dragIndex != null
+            ? ReorderableDragStartListener(
+                index: dragIndex,
+                child: const Icon(Icons.drag_handle),
+              )
+            : null,
+      ),
+    );
+  }
+
+  // 1セクション分（カテゴリ名見出し + ReorderableListView）を組み立てる。
+  // title が null の場合は見出しを表示しない（カテゴリが1件もないときのフラット表示用）。
+  Widget _buildSection(String? title, List<Map<String, dynamic>> items) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Expanded(child: Text('よく買うもの')),
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
+          if (title != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ReorderableListView.builder(
+            buildDefaultDragHandles: false,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            onReorderItem: (oldIndex, newIndex) =>
+                _onReorderInSection(items, oldIndex, newIndex),
+            itemBuilder: (_, i) => _buildTile(items[i], dragIndex: i),
           ),
         ],
       ),
-      content: SizedBox(
-        width: double.maxFinite,
+    );
+  }
+
+  Widget _buildBody() {
+    if (_favorites.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Text('まだ登録されていません'),
+      );
+    }
+
+    if (_searchText.isNotEmpty) {
+      // 検索中はカテゴリ分けせず、フラットな絞り込みリストのみを表示する（並べ替え不可）
+      return Scrollbar(
+        controller: _bodyScrollCtrl,
+        thumbVisibility: true,
+        child: ListView.builder(
+          controller: _bodyScrollCtrl,
+          padding: EdgeInsets.zero,
+          itemCount: _filteredFavorites.length,
+          itemBuilder: (_, i) => _buildTile(_filteredFavorites[i]),
+        ),
+      );
+    }
+
+    final categories = ref.watch(categoryProvider).value ?? <Category>[];
+    final sections =
+        buildFavoriteSections(favorites: _favorites, categories: categories);
+
+    final sectionWidgets = sections == null
+        ? [_buildSection(null, _favorites)]
+        : [for (final s in sections) _buildSection(s.title, s.items)];
+
+    return Scrollbar(
+      controller: _bodyScrollCtrl,
+      thumbVisibility: true,
+      child: ListView(
+        controller: _bodyScrollCtrl,
+        padding: EdgeInsets.zero,
+        children: sectionWidgets,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('よく買うもの'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(12),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (_pendingUndoFavorite != null)
-              Material(
-                color: Colors.grey[850],
-                borderRadius: BorderRadius.circular(4),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          '削除しました',
-                          style: TextStyle(color: Colors.white, fontSize: 14),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Material(
+                  color: Colors.grey[850],
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            '削除しました',
+                            style:
+                                TextStyle(color: Colors.white, fontSize: 14),
+                          ),
                         ),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          _undoTimer?.cancel();
-                          final data = _pendingUndoFavorite!;
-                          setState(() => _pendingUndoFavorite = null);
-                          await DatabaseHelper.instance.restoreFavorite(
-                            data['name'] as String,
-                            data['price'] as int,
-                            data['quantity'] as int,
-                            data['sortOrder'] as int,
-                            categoryId: data['categoryId'] as int?,
-                          );
-                          await _load();
-                        },
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.amber,
+                        TextButton(
+                          onPressed: () async {
+                            _undoTimer?.cancel();
+                            final data = _pendingUndoFavorite!;
+                            setState(() => _pendingUndoFavorite = null);
+                            await DatabaseHelper.instance.restoreFavorite(
+                              data['name'] as String,
+                              data['price'] as int,
+                              data['quantity'] as int,
+                              data['sortOrder'] as int,
+                              categoryId: data['categoryId'] as int?,
+                            );
+                            await _load();
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.amber,
+                          ),
+                          child: const Text('元に戻す'),
                         ),
-                        child: const Text('元に戻す'),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -191,181 +355,37 @@ class _FavoritesDialogState extends ConsumerState<FavoritesDialog> {
                   label: Text(_allSelected ? '全解除' : '全選択'),
                 ),
               ),
-            if (_favorites.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Text('まだ登録されていません'),
-              )
-            else if (_searchText.isEmpty)
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 320),
-                  child: Scrollbar(
-                    controller: _scrollCtrl,
-                    thumbVisibility: true,
-                    child: ReorderableListView.builder(
-                      scrollController: _scrollCtrl,
-                      shrinkWrap: true,
-                      itemCount: _favorites.length,
-                      onReorderItem: _onReorderItem,
-                      itemBuilder: (_, i) {
-                        final fav = _favorites[i];
-                        final id = fav['id'] as int;
-                        final name = fav['name'] as String;
-                        final price = fav['price'] as int;
-                        final qty = fav['quantity'] as int;
-                        final subtitle =
-                            price > 0 ? '¥$price × $qty' : '数量: $qty';
-                        return Dismissible(
-                          key: ValueKey(id),
-                          direction: DismissDirection.endToStart,
-                          background: Container(
-                            color: Colors.red,
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.only(right: 16),
-                            child: const Icon(
-                              Icons.delete,
-                              color: Colors.white,
-                            ),
-                          ),
-                          onDismissed: (_) async {
-                            _pendingUndoFavorite = Map.from(fav);
-                            _selectedIds.remove(id);
-                            await DatabaseHelper.instance.deleteFavorite(id);
-                            await _load();
-                            if (!mounted) return;
-                            _undoTimer?.cancel();
-                            _undoTimer = Timer(const Duration(seconds: 5), () {
-                              if (!mounted) return;
-                              setState(() => _pendingUndoFavorite = null);
-                            });
-                          },
-                          child: ListTile(
-                            leading: Checkbox(
-                              value: _selectedIds.contains(id),
-                              onChanged: (v) {
-                                setState(() {
-                                  if (v == true) {
-                                    _selectedIds.add(id);
-                                  } else {
-                                    _selectedIds.remove(id);
-                                  }
-                                });
-                              },
-                            ),
-                            title: Text(name),
-                            subtitle: Text(subtitle),
-                            onTap: () async {
-                              await showDialog<void>(
-                                context: context,
-                                builder: (_) => _EditFavoriteDialog(
-                                  id: id,
-                                  initialName: name,
-                                  initialPrice: price,
-                                  initialQuantity: qty,
-                                  initialCategoryId: fav['categoryId'] as int?,
-                                ),
-                              );
-                              await _load();
-                            },
-                            trailing: ReorderableDragStartListener(
-                              index: i,
-                              child: const Icon(Icons.drag_handle),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              )
-            else
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 320),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _filteredFavorites.length,
-                    itemBuilder: (_, i) {
-                      final fav = _filteredFavorites[i];
-                      final id = fav['id'] as int;
-                      final name = fav['name'] as String;
-                      final price = fav['price'] as int;
-                      final qty = fav['quantity'] as int;
-                      final subtitle = price > 0 ? '¥$price × $qty' : '数量: $qty';
-                      return Dismissible(
-                        key: ValueKey(id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          color: Colors.red,
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 16),
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        onDismissed: (_) async {
-                          _pendingUndoFavorite = Map.from(fav);
-                          _selectedIds.remove(id);
-                          await DatabaseHelper.instance.deleteFavorite(id);
-                          await _load();
-                          if (!mounted) return;
-                          _undoTimer?.cancel();
-                          _undoTimer = Timer(const Duration(seconds: 5), () {
-                            if (!mounted) return;
-                            setState(() => _pendingUndoFavorite = null);
-                          });
-                        },
-                        child: ListTile(
-                          leading: Checkbox(
-                            value: _selectedIds.contains(id),
-                            onChanged: (v) {
-                              setState(() {
-                                if (v == true) {
-                                  _selectedIds.add(id);
-                                } else {
-                                  _selectedIds.remove(id);
-                                }
-                              });
-                            },
-                          ),
-                          title: Text(name),
-                          subtitle: Text(subtitle),
-                          onTap: () async {
-                            await showDialog<void>(
-                              context: context,
-                              builder: (_) => _EditFavoriteDialog(
-                                id: id,
-                                initialName: name,
-                                initialPrice: price,
-                                initialQuantity: qty,
-                                initialCategoryId: fav['categoryId'] as int?,
-                              ),
-                            );
-                            await _load();
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
+            Expanded(child: _buildBody()),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () async {
-            await showDialog<void>(
-              context: context,
-              builder: (_) => _AddFavoriteDialog(onAdded: _load),
-            );
-          },
-          child: const Text('直接登録'),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () async {
+                    await showDialog<void>(
+                      context: context,
+                      builder: (_) => _AddFavoriteDialog(onAdded: _load),
+                    );
+                  },
+                  child: const Text('直接登録'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _selectedIds.isEmpty ? null : _addToList,
+                  child: const Text('リストに追加'),
+                ),
+              ),
+            ],
+          ),
         ),
-        FilledButton(
-          onPressed: _selectedIds.isEmpty ? null : _addToList,
-          child: const Text('リストに追加'),
-        ),
-      ],
+      ),
     );
   }
 }

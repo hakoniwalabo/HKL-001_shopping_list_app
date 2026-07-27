@@ -1,6 +1,6 @@
 # HKL-001 買い物リストアプリ 設計書
 
-**Rev 8.7　2026年改訂**
+**Rev 8.8　2026年改訂**
 
 ---
 
@@ -24,6 +24,7 @@
 | 8.5 | 2026-06-22〜29 | カテゴリ機能追加（DB v7）・よく買うものダイアログ改善（× ボタン・スクロールバー・検索窓）・restoreFavorite categoryId 修正 |
 | 8.6 | 2026-06-29 | _EditFavoriteDialog にカテゴリ追加ボタン追加・restoreFavorite categoryId 追加（Undo 時カテゴリ保持）・カテゴリ削除後のアイテム消失バグ修正 |
 | 8.7 | 2026-07-05 | 商品名の入力候補表示機能の仕様修正（item_history 履歴DB方式ではなく、現在のリスト内／よく買うもの内の既存商品名から絞り込む candidateNames 方式であることを明記。DB永続化なし・頻度順表示ではない）・バックアップ読み込み時の categoryProvider／itemProvider 同期バグ修正、起動時タブ選択（常に左端）・インポートリストの追加位置（常に右端）の仕様を反映・item_history テーブル関連の記述を削除（2026-06-29 に完全削除済み、復元対象外）・spec 全体を現行コードと照合し乖離を解消 |
+| 8.8 | 2026-07-27 | よく買うものを全画面表示に変更（`FavoritesDialog` → `FavoritesScreen`、AppBar+`Navigator.push` 遷移）・カテゴリ別セクション表示に対応（カテゴリ内のみドラッグ並べ替え可能、検索中・カテゴリ未登録時は従来どおりフラット表示）・`favorites_dialog.dart` を `favorites_screen.dart` へ統合し前者を削除・ヘルプ更新 |
 
 ---
 
@@ -103,14 +104,14 @@ lib/
 │   ├─ purchase_provider.dart
 │   └─ category_provider.dart     ← 新規
 ├─ screens/
-│   └─ shopping_list_screen.dart
+│   ├─ shopping_list_screen.dart
+│   └─ favorites_screen.dart      ← 新規（旧 favorites_dialog.dart を統合）
 ├─ services/
 │   └─ backup_service.dart
 └─ widgets/
     ├─ add_item_dialog.dart
     ├─ ad_banner.dart
-    ├─ category_management_dialog.dart ← 新規
-    ├─ favorites_dialog.dart
+    ├─ category_management_dialog.dart
     ├─ help_dialog.dart
     ├─ item_tile.dart
     ├─ list_management_buttons.dart
@@ -445,7 +446,7 @@ TotalSummary(items: items)
 | 呼び出し元 | candidateNames の内容 |
 |-----------|----------------------|
 | 商品追加・編集ダイアログ（`add_item_dialog.dart`） | `itemProvider` が保持する**現在表示中のリスト内**の商品名一覧（`shopping_list_screen.dart` の `build()` 内で `itemAsync` から算出） |
-| よく買うもの直接登録ダイアログ（`favorites_dialog.dart` の `_AddFavoriteDialog`） | `DatabaseHelper.getFavorites()` で取得した**よく買うもの一覧**内の商品名一覧 |
+| よく買うもの直接登録ダイアログ（`favorites_screen.dart` の `_AddFavoriteDialog`） | `DatabaseHelper.getFavorites()` で取得した**よく買うもの一覧**内の商品名一覧 |
 
 #### 表示ロジック（`item_name_field.dart`）
 
@@ -525,31 +526,37 @@ void _showAddListDialog() {
 
 ### 8.11 よく買うもの機能
 
-よく買う商品をあらかじめ登録しておき、ダイアログから複数選択して現在のリストに一括追加できる機能。
+よく買う商品をあらかじめ登録しておき、全画面から複数選択して現在のリストに一括追加できる機能。
 
 - よく買うリストは全リスト共通（listId に依存しない）
 - 追加時に金額・個数の確認ステップなし（登録値をそのまま使用）
 
-#### よく買うものダイアログ（`favorites_dialog.dart`）
+#### よく買うもの画面（`favorites_screen.dart`）
+
+AppBar 右上のハートボタンから `Navigator.push` で遷移する独立画面（モーダルダイアログではない）。戻る矢印で閉じ、`Navigator.pop(context, 追加件数)` で呼び出し元へ結果を返す。
 
 ```
-AlertDialog
- ├─ タイトル「よく買うもの」
- ├─ × ボタン（右上：ダイアログを閉じる）  ← 新規
- ├─ 検索窓（TextField：商品名でリストを絞り込む）  ← 新規
- ├─ Scrollbar（thumbVisibility: true）  ← 新規
- ├─ [全選択 / 全解除] トグルボタン（favorites 0件時は非表示）
- ├─ 商品一覧
- │   ├─ 0件時：「まだ登録されていません」
- │   └─ 1件以上：
- │       Dismissible（スワイプ左→削除）＋ インライン Undo バナー
+Scaffold
+ ├─ AppBar（タイトル「よく買うもの」・戻る矢印で閉じる）
+ ├─ body
+ │   ├─ 検索窓（TextField：商品名でリストを絞り込む）
+ │   ├─ [全選択 / 全解除] トグルボタン（favorites 0件時は非表示）
+ │   └─ 商品一覧（Expanded）
+ │       ├─ 0件時：「まだ登録されていません」
+ │       ├─ 検索中：カテゴリ分けせずフラットな絞り込みリスト（並べ替え不可）
+ │       ├─ カテゴリ未登録：フラット表示（従来どおり、ReorderableListView で並べ替え可能）
+ │       └─ カテゴリ1件以上・非検索時：カテゴリ別セクション表示
+ │           （カテゴリごとに見出し＋ReorderableListView。カテゴリ内のみ並べ替え可能。
+ │            categoryId が null／存在しないカテゴリを指す商品は「カテゴリなし」として最後に表示）
+ │       各行：Dismissible（スワイプ左→削除）＋ インライン Undo バナー
  │        └─ ListTile
  │            ├─ leading: Checkbox（タップでチェック切替）
  │            ├─ title: 商品名
- │            ├─ subtitle: ¥価格 × 個数（price=0 なら「数量: N」）・カテゴリ名
+ │            ├─ subtitle: ¥価格 × 個数（price=0 なら「数量: N」）
  │            └─ onTap: _EditFavoriteDialog を開く
- ├─ 「直接登録」TextButton → _AddFavoriteDialog（favorites_dialog.dart 内）
- └─ 「リストに追加」FilledButton（0件選択時は disabled）
+ └─ bottomNavigationBar
+     ├─ 「直接登録」OutlinedButton → _AddFavoriteDialog（favorites_screen.dart 内）
+     └─ 「リストに追加」FilledButton（0件選択時は disabled）
 ```
 
 #### _EditFavoriteDialog（価格・個数編集ダイアログ）
