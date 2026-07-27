@@ -74,7 +74,7 @@ class HelpDialog extends StatelessWidget {
             _HelpItem(
               icon: Icons.favorite_border,
               label: 'よく買うものから追加',
-              description: 'AppBar右上のハートボタンから定番商品を登録・管理できます。チェックして「リストに追加」を押すと一括追加されます。商品をタップすると価格・個数を編集できます。検索窓で商品名を絞り込むことができます',
+              description: 'AppBar右上のハートボタンから、定番商品を管理する画面が開きます（カテゴリ別に一覧表示されます）。チェックして「リストに追加」を押すと一括追加されます。商品をタップすると価格・個数・カテゴリを編集できます。検索窓で商品名を絞り込むことができ、各カテゴリ内はドラッグで並べ替えできます',
             ),
             _HelpItem(
               icon: Icons.share_outlined,
