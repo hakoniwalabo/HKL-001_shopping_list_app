@@ -25,6 +25,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   Map<String, dynamic>? _pendingUndoFavorite;
   Timer? _undoTimer;
   final TextEditingController _searchCtrl = TextEditingController();
+  final ScrollController _bodyScrollCtrl = ScrollController();
   String _searchText = '';
 
   @override
@@ -37,6 +38,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   void dispose() {
     _undoTimer?.cancel();
     _searchCtrl.dispose();
+    _bodyScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -237,10 +239,15 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
     if (_searchText.isNotEmpty) {
       // 検索中はカテゴリ分けせず、フラットな絞り込みリストのみを表示する（並べ替え不可）
-      return ListView.builder(
-        padding: EdgeInsets.zero,
-        itemCount: _filteredFavorites.length,
-        itemBuilder: (_, i) => _buildTile(_filteredFavorites[i]),
+      return Scrollbar(
+        controller: _bodyScrollCtrl,
+        thumbVisibility: true,
+        child: ListView.builder(
+          controller: _bodyScrollCtrl,
+          padding: EdgeInsets.zero,
+          itemCount: _filteredFavorites.length,
+          itemBuilder: (_, i) => _buildTile(_filteredFavorites[i]),
+        ),
       );
     }
 
@@ -252,9 +259,14 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         ? [_buildSection(null, _favorites)]
         : [for (final s in sections) _buildSection(s.title, s.items)];
 
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: sectionWidgets,
+    return Scrollbar(
+      controller: _bodyScrollCtrl,
+      thumbVisibility: true,
+      child: ListView(
+        controller: _bodyScrollCtrl,
+        padding: EdgeInsets.zero,
+        children: sectionWidgets,
+      ),
     );
   }
 
