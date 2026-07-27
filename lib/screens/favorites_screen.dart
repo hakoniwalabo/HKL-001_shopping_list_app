@@ -51,8 +51,8 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     });
   }
 
-  // FavoritesDialog._onReorderItem と同一。グローバルな favorites 全体リスト
-  // 上の oldIndex/newIndex を受け取り、DB へ永続化する。
+  // グローバルな favorites 全体リスト上の oldIndex/newIndex を受け取り、
+  // DB へ永続化する。
   Future<void> _onReorderItem(int oldIndex, int newIndex) async {
     final list = [..._favorites];
     final item = list.removeAt(oldIndex);
