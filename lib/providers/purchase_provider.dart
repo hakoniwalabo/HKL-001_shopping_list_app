@@ -25,16 +25,24 @@ class PurchaseNotifier extends AsyncNotifier<bool> {
     ref.onDispose(sub.cancel);
 
     // ③〜⑤ cached の真偽によらず毎回 Play Store 側の実際の購入状態を照会し、
-    // 返金・取り消し（失効）を検知する。通信エラー・例外時は cached を維持する
-    // （安全側に倒し、正規購入者の広告非表示状態を誤って解除しない）。
+    // 返金・取り消し（失効）を検知する。起動表示をブロックしないよう、
+    // 照会と反映はバックグラウンドで行う（結果は _persist 経由で state に反映）。
+    unawaited(_refreshFromPlayStore(cached));
+
+    return cached;
+  }
+
+  /// バックグラウンドでPlay Store側の実際の購入状態を照会し、必要なら永続化する。
+  Future<void> _refreshFromPlayStore(bool cached) async {
     final resolution = await _queryAdFreeResolution(cached);
     if (resolution.shouldPersist) {
-      await prefs.setBool(_kPrefKey, resolution.resolved);
+      await _persist(resolution.resolved);
     }
-    return resolution.resolved;
   }
 
   /// Play Store 側の実際の購入状態を照会し、[resolveAdFreeState] で判定する。
+  /// 見つかった購入のうち未確定（unacknowledged）のものは completePurchase() で
+  /// 確定させる（未確定のまま放置すると Google Play により自動返金されるため）。
   /// `queryPastPurchases()` 自体が例外を投げた場合も通信エラーと同様に扱い、
   /// cached の値を維持する（無音で失敗させる。ユーザー向けエラー表示はしない）。
   Future<AdFreeResolution> _queryAdFreeResolution(bool cached) async {
@@ -42,12 +50,28 @@ class PurchaseNotifier extends AsyncNotifier<bool> {
       final addition = InAppPurchase.instance
           .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
       final response = await addition.queryPastPurchases();
+      if (response.error != null) {
+        return resolveAdFreeState(
+          cached: cached,
+          purchasedProductIds: const [],
+          hasError: true,
+          targetProductId: kRemoveAdsProductId,
+        );
+      }
+
+      final purchased = response.pastPurchases
+          .where((p) => p.status == PurchaseStatus.purchased)
+          .toList();
+      for (final p in purchased) {
+        if (p.productID == kRemoveAdsProductId && p.pendingCompletePurchase) {
+          await InAppPurchase.instance.completePurchase(p);
+        }
+      }
+
       return resolveAdFreeState(
         cached: cached,
-        purchasedProductIds: response.pastPurchases
-            .map((p) => p.productID)
-            .toList(),
-        hasError: response.error != null,
+        purchasedProductIds: purchased.map((p) => p.productID).toList(),
+        hasError: false,
         targetProductId: kRemoveAdsProductId,
       );
     } catch (_) {
