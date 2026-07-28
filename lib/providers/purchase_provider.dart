@@ -25,11 +25,25 @@ class PurchaseNotifier extends AsyncNotifier<bool> {
     ref.onDispose(sub.cancel);
 
     // ③〜⑤ cached の真偽によらず毎回 Play Store 側の実際の購入状態を照会し、
-    // 返金・取り消し（失効）を検知する。起動表示をブロックしないよう、
-    // 照会と反映はバックグラウンドで行う（結果は _persist 経由で state に反映）。
-    unawaited(_refreshFromPlayStore(cached));
+    // 返金・取り消し（失効）を検知する。
+    //
+    // 広告が「表示される」までの遅延は許容できるが、「非表示になる」までの遅延は
+    // 許容できない（正規購入者を待たせない）という業務要件のため、方向によって
+    // 待ち方を変える：
+    // - cached == true（現在広告なし）: 失効していれば広告が復活するまで多少
+    //   遅れてもよいため、照会はバックグラウンドで行い起動表示をブロックしない
+    // - cached == false（現在広告あり）: 正規購入が見つかった場合は広告を
+    //   即座に消す必要があるため、照査の完了を待ってから返す
+    if (cached) {
+      unawaited(_refreshFromPlayStore(cached));
+      return cached;
+    }
 
-    return cached;
+    final resolution = await _queryAdFreeResolution(cached);
+    if (resolution.shouldPersist) {
+      await prefs.setBool(_kPrefKey, resolution.resolved);
+    }
+    return resolution.resolved;
   }
 
   /// バックグラウンドでPlay Store側の実際の購入状態を照会し、必要なら永続化する。
