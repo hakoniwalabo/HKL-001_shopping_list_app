@@ -18,7 +18,7 @@ class UpgradeDialog extends ConsumerWidget {
         ],
       ),
       content: const Text(
-        '一度購入すると広告が永久に非表示になります。\n\n'
+        '一度購入すると広告が非表示になります。\n\n'
         '端末を変えても「購入を復元」で再適用できます。',
       ),
       actions: [

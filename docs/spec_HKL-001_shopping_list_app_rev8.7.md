@@ -156,7 +156,7 @@ lib/
 | バックアップ | 全データ（lists・items・favorites・categories）をJSONファイル化。タップ後「共有」「端末に保存」を選択（端末保存は file_picker saveFile） |
 | 読み込む（バックアップ／共有リスト） | JSONファイルを選択してインポート（マージ方式・同名リストは連番付与）。バックアップ・共有リスト・端末保存ファイルのいずれも取り込み可。フィルタは FileType.any（中身で検証） |
 | 広告表示 | AdMob バナー広告（画面下部固定・広告なし購入済みの場合は非表示） |
-| 広告なしアップグレード | 買い切り IAP（`remove_ads`）でアプリ内広告を永久非表示 |
+| 広告なしアップグレード | 買い切り IAP（`remove_ads`）でアプリ内広告を非表示 |
 
 ### 5.2 UI構成
 
@@ -893,7 +893,7 @@ if (!mounted) return;
 | 機能 | 実装ファイル | 内容 |
 |------|-------------|------|
 | バナー広告 | `widgets/ad_banner.dart` | 画面下部固定。購入済みの場合は非表示 |
-| 広告なし購入 | `providers/purchase_provider.dart` | 買い切り IAP。購入後は広告が永久非表示 |
+| 広告なし購入 | `providers/purchase_provider.dart` | 買い切り IAP。購入後は広告が非表示 |
 | アップグレードUI | `widgets/upgrade_dialog.dart` | AppBar の ★ ボタンから起動 |
 
 ### 14.2 AdMob バナー広告
