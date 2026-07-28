@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../utils/purchase_resolution.dart';
 
 /// Play Console に登録するプロダクト ID（本番リリース前に要設定）
 const kRemoveAdsProductId = 'remove_ads';
@@ -21,15 +24,40 @@ class PurchaseNotifier extends AsyncNotifier<bool> {
     );
     ref.onDispose(sub.cancel);
 
-    // ③ キャッシュが false のときだけ Play Store で照合
-    if (!cached) {
-      try {
-        final available = await InAppPurchase.instance.isAvailable();
-        if (available) await InAppPurchase.instance.restorePurchases();
-      } catch (_) {}
+    // ③〜⑤ cached の真偽によらず毎回 Play Store 側の実際の購入状態を照会し、
+    // 返金・取り消し（失効）を検知する。通信エラー・例外時は cached を維持する
+    // （安全側に倒し、正規購入者の広告非表示状態を誤って解除しない）。
+    final resolution = await _queryAdFreeResolution(cached);
+    if (resolution.shouldPersist) {
+      await prefs.setBool(_kPrefKey, resolution.resolved);
     }
+    return resolution.resolved;
+  }
 
-    return cached;
+  /// Play Store 側の実際の購入状態を照会し、[resolveAdFreeState] で判定する。
+  /// `queryPastPurchases()` 自体が例外を投げた場合も通信エラーと同様に扱い、
+  /// cached の値を維持する（無音で失敗させる。ユーザー向けエラー表示はしない）。
+  Future<AdFreeResolution> _queryAdFreeResolution(bool cached) async {
+    try {
+      final addition = InAppPurchase.instance
+          .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
+      final response = await addition.queryPastPurchases();
+      return resolveAdFreeState(
+        cached: cached,
+        purchasedProductIds: response.pastPurchases
+            .map((p) => p.productID)
+            .toList(),
+        hasError: response.error != null,
+        targetProductId: kRemoveAdsProductId,
+      );
+    } catch (_) {
+      return resolveAdFreeState(
+        cached: cached,
+        purchasedProductIds: const [],
+        hasError: true,
+        targetProductId: kRemoveAdsProductId,
+      );
+    }
   }
 
   void _onPurchaseUpdate(List<PurchaseDetails> purchases) {
@@ -57,8 +85,9 @@ class PurchaseNotifier extends AsyncNotifier<bool> {
       final available = await InAppPurchase.instance.isAvailable();
       if (!available) return 'Google Play に接続できません';
 
-      final response = await InAppPurchase.instance
-          .queryProductDetails({kRemoveAdsProductId});
+      final response = await InAppPurchase.instance.queryProductDetails({
+        kRemoveAdsProductId,
+      });
 
       if (response.error != null) return response.error!.message;
       if (response.productDetails.isEmpty) {
