@@ -29,11 +29,15 @@
 
 ### 判定ロジック（`PurchaseNotifier.build()` を変更）
 
-1. `cached`（SharedPreferencesの値）の真偽によらず、毎回 `InAppPurchase.instance.getPlatformAddition<InAppPurchaseAndroidPlatformAddition>().queryPastPurchases()` を呼ぶ
-2. `response.error` が非nullの場合（オフライン等の通信エラー） → 何もせず `cached` の値をそのまま採用する（安全側に倒し、正規購入者の広告非表示状態を誤って解除しない）
-3. `response.error` がnullで、`pastPurchases` に `productID == kRemoveAdsProductId` かつ有効な購入が含まれる場合 → `true` を採用しSharedPreferencesへ保存
-4. `response.error` がnullで、上記が含まれない場合 → `false` を採用しSharedPreferencesへ保存（広告が復活する）
-5. 既存の手動購入フロー（`purchase()`）・手動復元ボタン（`restore()`、`upgrade_dialog.dart`の「購入を復元」）はそのまま維持し、変更しない
+1. `cached`（SharedPreferencesの値）の真偽によらず、毎回 `InAppPurchase.instance.getPlatformAddition<InAppPurchaseAndroidPlatformAddition>().queryPastPurchases()` を呼び、Play Store側の実際の購入状態を照会する。ただし、待ち方は`cached`の値によって非対称にする（広告が「表示される」までの遅延は許容できるが、「非表示になる」までの遅延は許容できない＝正規購入者を待たせないという業務要件のため）
+   - `cached == true`（現在広告なし）：失効していれば広告が復活するまで多少遅れてもよいため、照会はバックグラウンドで実行し（`unawaited`）、起動処理（`build()`の戻り値）はブロックしない
+   - `cached == false`（現在広告あり）：正規購入が見つかった場合は広告を即座に消す必要があるため、照会の完了を待ってから結果を返す
+2. `queryPastPurchases()` の呼び出しには10秒のタイムアウト（`_kQueryPastPurchasesTimeout`）を設定する。最終ブランチレビューでの指摘を受けて追加対応したもので、タイムアウトが発生した場合も通信エラーと同様に扱い `cached` の値を維持する
+3. `response.error` が非nullの場合（オフライン等の通信エラー） → 何もせず `cached` の値をそのまま採用する（安全側に倒し、正規購入者の広告非表示状態を誤って解除しない）
+4. `response.error` がnullの場合、見つかった購入（`PurchaseStatus.purchased`）のうち `productID == kRemoveAdsProductId` かつ未確定（`pendingCompletePurchase == true`）のものは `completePurchase()` で確定させる。コンビニ払いなど支払い完了までに時間差がある決済方式では購入が保留（pending）状態で返ってくることがあり、未確定のまま3日以上放置するとGoogle Playが自動的に返金してしまう仕様があるため、これを防ぐための処理である
+5. `response.error` がnullで、`pastPurchases` に `productID == kRemoveAdsProductId` かつ有効な購入が含まれる場合 → `true` を採用しSharedPreferencesへ保存
+6. `response.error` がnullで、上記が含まれない場合 → `false` を採用しSharedPreferencesへ保存（広告が復活する）
+7. 既存の手動購入フロー（`purchase()`）・手動復元ボタン（`restore()`、`upgrade_dialog.dart`の「購入を復元」）はそのまま維持し、変更しない
 
 ### エラーハンドリング
 
@@ -41,14 +45,18 @@
 
 ### テスト方針
 
-- `PurchaseNotifier` のロジックを検証する単体テストを追加する（`flutter test`）
-- Riverpodの `AsyncNotifier` を対象に、`InAppPurchase`/`InAppPurchaseAndroidPlatformAddition` をモック化し、以下のケースを検証する：
-  - 購入が見つかる場合 → `true`
-  - 購入が見つからない場合（エラーなし） → `false`
-  - クエリがエラーを返す場合 → 直前のキャッシュ値を維持
+- 当初は `InAppPurchase`/`InAppPurchaseAndroidPlatformAddition` をモック化して `PurchaseNotifier`（Riverpodの `AsyncNotifier`）本体を直接検証する方針を想定していたが、`InAppPurchase.instance` への初回アクセスがネイティブのBillingClientチャネル接続を実際に発火させてしまう技術的リスクが判明したため、実装段階で以下の方針に転換した
+- 判定ロジックを `resolveAdFreeState()`（`lib/utils/purchase_resolution.dart`）という純粋関数に切り出し、これを対象に単体テストを追加する（`test/purchase_resolution_test.dart`、5ケース）
+  - エラーなし・対象商品が `pastPurchases` に含まれる場合 → `true` を採用し、永続化する
+  - エラーなし・対象商品が含まれない場合 → `false` を採用し、永続化する（返金・取り消しの検知）
+  - エラーあり・`cached` が `true` の場合 → `cached` を維持し、永続化しない
+  - エラーあり・`cached` が `false` の場合 → `cached` を維持し、永続化しない
+  - 対象と異なる `productID` の購入しかない場合 → `false` を採用する
+- `PurchaseNotifier` 本体（`build()`・結線部分）を対象にした統合的な単体テストは、上記と同じ技術的リスクにより今回は未実装。`docs/remaining_tasks_purchase_revocation_2026-07-28.md` の「2.2」に保留事項として記載済み
 - 既存の `flutter analyze` ・ `flutter test` がクリーンであることを確認する
 
 ### 影響ファイル
 
 - `lib/providers/purchase_provider.dart`（主な変更対象）
-- テストファイル（新規追加、既存のテスト構成に合わせる）
+- `lib/utils/purchase_resolution.dart`（新規、判定ロジックの純粋関数）
+- `test/purchase_resolution_test.dart`（新規、上記のテスト）

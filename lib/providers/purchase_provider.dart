@@ -10,6 +10,7 @@ import '../utils/purchase_resolution.dart';
 /// Play Console に登録するプロダクト ID（本番リリース前に要設定）
 const kRemoveAdsProductId = 'remove_ads';
 const _kPrefKey = 'is_ad_free';
+const _kQueryPastPurchasesTimeout = Duration(seconds: 10);
 
 class PurchaseNotifier extends AsyncNotifier<bool> {
   @override
@@ -63,7 +64,9 @@ class PurchaseNotifier extends AsyncNotifier<bool> {
     try {
       final addition = InAppPurchase.instance
           .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
-      final response = await addition.queryPastPurchases();
+      final response = await addition
+          .queryPastPurchases()
+          .timeout(_kQueryPastPurchasesTimeout);
       if (response.error != null) {
         return resolveAdFreeState(
           cached: cached,
