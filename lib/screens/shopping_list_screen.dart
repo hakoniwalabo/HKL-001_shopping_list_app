@@ -1034,7 +1034,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
       ),
       // バナー広告（広告なし購入済みの場合は非表示）。
       // bottomNavigationBar に置くことで Scaffold が FAB を広告の上へ持ち上げる
-      bottomNavigationBar: isAdFree ? null : const AdBannerWidget(),
+      bottomNavigationBar: isAdFree ? null : const SafeArea(child: AdBannerWidget()),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await showAddItemDialog(
