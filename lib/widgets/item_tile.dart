@@ -72,7 +72,7 @@ class ItemTile extends StatelessWidget {
                       if (onMoveToTab != null)
                         ListTile(
                           leading: const Icon(Icons.swap_horiz),
-                          title: const Text('別タブに移動'),
+                          title: const Text('別のリストに移動'),
                           onTap: () => Navigator.pop(context, 'move'),
                         ),
                       if (onAddToFavorites != null)

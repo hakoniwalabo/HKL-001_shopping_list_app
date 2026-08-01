@@ -44,7 +44,7 @@ class HelpDialog extends StatelessWidget {
             _HelpItem(
               icon: Icons.touch_app,
               label: 'リスト名を変更',
-              description: 'タブを長押し',
+              description: 'リスト名を長押し',
             ),
             _HelpItem(
               icon: Icons.playlist_add,
@@ -59,7 +59,7 @@ class HelpDialog extends StatelessWidget {
             _HelpItem(
               icon: Icons.drive_file_move_outline,
               label: '別リストへ移動',
-              description: '商品を長押しするとメニューが表示されます\n「別タブに移動」で移動先リストを選択、「よく買うものに登録」でよく買うものに追加できます',
+              description: '商品を長押しするとメニューが表示されます\n「別のリストに移動」で移動先リストを選択、「よく買うものに登録」でよく買うものに追加できます',
             ),
             _HelpItem(
               icon: Icons.search,

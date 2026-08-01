@@ -443,8 +443,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => _SingleFieldDialog(
-        title: 'タブ名変更',
-        labelText: 'タブ名',
+        title: 'リスト名変更',
+        labelText: 'リスト名',
         initialText: list.name,
         submitLabel: '変更',
         onSubmit: (newName) async {
