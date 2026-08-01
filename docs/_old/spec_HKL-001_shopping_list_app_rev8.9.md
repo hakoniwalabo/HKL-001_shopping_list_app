@@ -1,6 +1,6 @@
 # HKL-001 買い物リストアプリ 設計書
 
-**Rev 8.8　2026年改訂**
+**Rev 8.9　2026年改訂**
 
 ---
 
@@ -25,6 +25,7 @@
 | 8.6 | 2026-06-29    | _EditFavoriteDialog にカテゴリ追加ボタン追加・restoreFavorite categoryId 追加（Undo 時カテゴリ保持）・カテゴリ削除後のアイテム消失バグ修正                                                                                                                                                                                         |     |
 | 8.7 | 2026-07-05    | 商品名の入力候補表示機能の仕様修正（item_history 履歴DB方式ではなく、現在のリスト内／よく買うもの内の既存商品名から絞り込む candidateNames 方式であることを明記。DB永続化なし・頻度順表示ではない）・バックアップ読み込み時の categoryProvider／itemProvider 同期バグ修正、起動時タブ選択（常に左端）・インポートリストの追加位置（常に右端）の仕様を反映・item_history テーブル関連の記述を削除（2026-06-29 に完全削除済み、復元対象外）・spec 全体を現行コードと照合し乖離を解消 |     |
 | 8.8 | 2026-07-27    | よく買うものを全画面表示に変更（`FavoritesDialog` → `FavoritesScreen`、AppBar+`Navigator.push` 遷移）・カテゴリ別セクション表示に対応（カテゴリ内のみドラッグ並べ替え可能、検索中・カテゴリ未登録時は従来どおりフラット表示）・`favorites_dialog.dart` を `favorites_screen.dart` へ統合し前者を削除・ヘルプ更新                                                                         |     |
+| 8.9 | 2026-07-31    | 広告バナー（AdBannerWidget）を `SafeArea` でラップし、エッジツーエッジ表示端末でジェスチャーナビゲーションバーと重なり画面下に隠れる不具合を修正（テスターフィードバック対応）。合わせて本設計書の記述（広告の配置先が「Scaffold body 最下部」となっていた誤記）を実装（`Scaffold.bottomNavigationBar`）に合わせて修正                                                                         |     |
 
 ---
 
@@ -191,12 +192,12 @@ Scaffold
  │
  ├─ FloatingActionButton（商品追加専用）
  │
- └─ AdBannerWidget（画面下部固定・広告なし購入済みの場合は非表示）
+ └─ bottomNavigationBar: SafeArea → AdBannerWidget（広告なし購入済みの場合は非表示）
 ```
 
 > **注:** FAB は商品追加専用。AppBar の追加/削除ボタンはリスト操作（タブ）用。
 > 合計表示は TabBar 直下・ListView の外側に固定配置する。
-> AdBannerWidget は Scaffold body 最下部に常駐し、`isAdFree = true` の場合は `SizedBox.shrink()` を返す。
+> AdBannerWidget は `Scaffold.bottomNavigationBar` に `SafeArea` でラップして配置する（エッジツーエッジ表示端末でジェスチャーナビゲーションバーと重ならないようにするため）。`isAdFree = true` の場合は `bottomNavigationBar` 自体が `null` になり非表示。広告の読み込み前・失敗時は `AdBannerWidget` 内部で `SizedBox.shrink()` を返す。
 > カテゴリが1件もない場合は従来のフラット表示。categoryId=null の商品はセクション末尾に表示。
 
 #### カテゴリ削除時の表示ロジック
@@ -903,7 +904,7 @@ if (!mounted) return;
 | App ID（AndroidManifest.xml） | `ca-app-pub-3940256099942544~3347511713` | admob.google.com で取得 |
 | Ad Unit ID（ad_banner.dart） | `ca-app-pub-3940256099942544/6300978111` | admob.google.com で取得 |
 | サイズ | `AdSize.banner` | — |
-| 表示位置 | Scaffold body 最下部 | — |
+| 表示位置 | Scaffold bottomNavigationBar（SafeAreaでラップ） | — |
 
 > ⚠️ **本番リリース前に必ず** `AndroidManifest.xml` と `ad_banner.dart` の両方をテスト ID から本番 ID に差し替えること。
 
