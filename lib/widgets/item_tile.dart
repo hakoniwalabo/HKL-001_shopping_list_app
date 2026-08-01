@@ -31,6 +31,10 @@ class ItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final priceText = item.price > 0 ? '¥${numberFormat.format(item.price)}' : '-';
+    final totalText = item.price > 0
+        ? '¥${numberFormat.format(item.price * item.quantity)}'
+        : '-';
     return Dismissible(
       key: ValueKey('${item.id}_${item.isChecked}'),
       direction: DismissDirection.endToStart,
@@ -102,8 +106,8 @@ class ItemTile extends StatelessWidget {
           children: [
             Text(
               '個数: ${item.quantity} / '
-              '単価: ¥${numberFormat.format(item.price)} / '
-              '税込合計: ¥${numberFormat.format(item.price * item.quantity)}',
+              '単価: $priceText / '
+              '税込合計: $totalText',
             ),
 
             if (item.memo.isNotEmpty)

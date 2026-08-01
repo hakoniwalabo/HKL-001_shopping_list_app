@@ -162,7 +162,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     final name = fav['name'] as String;
     final price = fav['price'] as int;
     final qty = fav['quantity'] as int;
-    final subtitle = price > 0 ? '$qty × ¥$price' : '個数: $qty';
+    final subtitle = price > 0 ? '$qty × ¥$price' : '$qty × -';
     return Dismissible(
       key: ValueKey(id),
       direction: DismissDirection.endToStart,
@@ -499,7 +499,7 @@ class _AddFavoriteDialogState extends ConsumerState<_AddFavoriteDialog> {
               TextFormField(
                 controller: _priceCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '税込価格（任意）'),
+                decoration: const InputDecoration(labelText: '税込価格'),
                 onTap: () => _priceCtrl.selection = TextSelection(
                   baseOffset: 0,
                   extentOffset: _priceCtrl.text.length,
@@ -680,7 +680,7 @@ class _EditFavoriteDialogState extends ConsumerState<_EditFavoriteDialog> {
               TextFormField(
                 controller: _priceCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '税込価格（任意）'),
+                decoration: const InputDecoration(labelText: '税込価格'),
                 onTap: () => _priceCtrl.selection = TextSelection(
                   baseOffset: 0,
                   extentOffset: _priceCtrl.text.length,
