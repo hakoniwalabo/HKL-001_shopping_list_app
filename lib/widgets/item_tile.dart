@@ -101,8 +101,8 @@ class ItemTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '単価: ¥${numberFormat.format(item.price)} / '
               '個数: ${item.quantity} / '
+              '単価: ¥${numberFormat.format(item.price)} / '
               '税込合計: ¥${numberFormat.format(item.price * item.quantity)}',
             ),
 

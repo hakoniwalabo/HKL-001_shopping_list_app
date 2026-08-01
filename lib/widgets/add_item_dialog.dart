@@ -259,9 +259,9 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
                   candidateNames: widget.candidateNames,
                 ),
                 const SizedBox(height: 12),
-                PriceField(controller: _priceCtrl),
-                const SizedBox(height: 12),
                 QuantityField(controller: _quantityCtrl),
+                const SizedBox(height: 12),
+                PriceField(controller: _priceCtrl),
                 if (isEdit) ...[
                   const SizedBox(height: 12),
                   MemoField(controller: _memoCtrl),

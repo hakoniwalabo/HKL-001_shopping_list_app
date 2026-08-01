@@ -162,7 +162,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     final name = fav['name'] as String;
     final price = fav['price'] as int;
     final qty = fav['quantity'] as int;
-    final subtitle = price > 0 ? '¥$price × $qty' : '数量: $qty';
+    final subtitle = price > 0 ? '$qty × ¥$price' : '個数: $qty';
     return Dismissible(
       key: ValueKey(id),
       direction: DismissDirection.endToStart,
@@ -484,19 +484,6 @@ class _AddFavoriteDialogState extends ConsumerState<_AddFavoriteDialog> {
                 candidateNames: _candidateNames,
               ),
               TextFormField(
-                controller: _priceCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '税込価格'),
-                onTap: () => _priceCtrl.selection = TextSelection(
-                  baseOffset: 0,
-                  extentOffset: _priceCtrl.text.length,
-                ),
-                validator: (v) {
-                  final n = int.tryParse(v ?? '');
-                  return (n == null || n < 0) ? '0以上の整数を入力してください' : null;
-                },
-              ),
-              TextFormField(
                 controller: _qtyCtrl,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: '個数'),
@@ -507,6 +494,19 @@ class _AddFavoriteDialogState extends ConsumerState<_AddFavoriteDialog> {
                 validator: (v) {
                   final n = int.tryParse(v ?? '');
                   return (n == null || n < 1) ? '1以上の整数を入力してください' : null;
+                },
+              ),
+              TextFormField(
+                controller: _priceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '税込価格（任意）'),
+                onTap: () => _priceCtrl.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: _priceCtrl.text.length,
+                ),
+                validator: (v) {
+                  final n = int.tryParse(v ?? '');
+                  return (n == null || n < 0) ? '0以上の整数を入力してください' : null;
                 },
               ),
               const SizedBox(height: 8),
@@ -665,19 +665,6 @@ class _EditFavoriteDialogState extends ConsumerState<_EditFavoriteDialog> {
                     (v == null || v.trim().isEmpty) ? '商品名を入力してください' : null,
               ),
               TextFormField(
-                controller: _priceCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '税込価格'),
-                onTap: () => _priceCtrl.selection = TextSelection(
-                  baseOffset: 0,
-                  extentOffset: _priceCtrl.text.length,
-                ),
-                validator: (v) {
-                  final n = int.tryParse(v ?? '');
-                  return (n == null || n < 0) ? '0以上の整数を入力してください' : null;
-                },
-              ),
-              TextFormField(
                 controller: _qtyCtrl,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: '個数'),
@@ -688,6 +675,19 @@ class _EditFavoriteDialogState extends ConsumerState<_EditFavoriteDialog> {
                 validator: (v) {
                   final n = int.tryParse(v ?? '');
                   return (n == null || n < 1) ? '1以上の整数を入力してください' : null;
+                },
+              ),
+              TextFormField(
+                controller: _priceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '税込価格（任意）'),
+                onTap: () => _priceCtrl.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: _priceCtrl.text.length,
+                ),
+                validator: (v) {
+                  final n = int.tryParse(v ?? '');
+                  return (n == null || n < 0) ? '0以上の整数を入力してください' : null;
                 },
               ),
               const SizedBox(height: 8),
