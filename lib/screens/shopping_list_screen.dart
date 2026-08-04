@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart' show Share;
@@ -19,6 +20,7 @@ import '../widgets/list_management_buttons.dart';
 import '../widgets/list_section.dart';
 import '../widgets/list_tab_bar.dart';
 import 'favorites_screen.dart';
+import '../widgets/budget_summary.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/total_summary.dart';
 import '../widgets/upgrade_dialog.dart';
@@ -452,6 +454,29 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           await loadLists();
           if (!mounted) return;
           setState(() {});
+        },
+      ),
+    );
+  }
+
+  Future<void> _showBudgetInputDialog(ShoppingList list) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => _BudgetInputDialog(
+        initialBudget: list.budget,
+        onSubmit: (newBudget) async {
+          try {
+            await DatabaseHelper.instance.updateListBudget(list.id!, newBudget);
+            await loadLists();
+            if (!mounted) return;
+            setState(() {});
+          } catch (_) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('予算の保存に失敗しました')),
+            );
+            await loadLists();
+          }
         },
       ),
     );
@@ -908,6 +933,24 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
           return Column(
             children: [
+              // 予算表示（TotalSummary直上・設計書 docs/superpowers/specs/2026-08-04-budget-display-design.md §3.2.2）
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: BudgetSummary(
+                  budget: shoppingLists
+                      .firstWhere(
+                        (e) => e.id == currentListId,
+                        orElse: () => ShoppingList(name: '買い物リスト'),
+                      )
+                      .budget,
+                  onTap: () => _showBudgetInputDialog(
+                    shoppingLists.firstWhere(
+                      (e) => e.id == currentListId,
+                      orElse: () => ShoppingList(name: '買い物リスト'),
+                    ),
+                  ),
+                ),
+              ),
               // 合計表示（タブ直下・設計書 §5.2 / §8.8）
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -1112,6 +1155,74 @@ class _SingleFieldDialogState extends State<_SingleFieldDialog> {
             await widget.onSubmit(value);
           },
           child: Text(widget.submitLabel),
+        ),
+      ],
+    );
+  }
+}
+
+class _BudgetInputDialog extends StatefulWidget {
+  final int initialBudget;
+  final Future<void> Function(int budget) onSubmit;
+
+  const _BudgetInputDialog({
+    required this.initialBudget,
+    required this.onSubmit,
+  });
+
+  @override
+  State<_BudgetInputDialog> createState() => _BudgetInputDialogState();
+}
+
+class _BudgetInputDialogState extends State<_BudgetInputDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // budget == 0（未設定）のときは空文字、それ以外は現在値を初期表示する
+    _controller = TextEditingController(
+      text: widget.initialBudget == 0 ? '' : '${widget.initialBudget}',
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('予算を設定'),
+      actionsOverflowDirection: VerticalDirection.down,
+      content: SingleChildScrollView(
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(labelText: '予算'),
+          onTap: () => _controller.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: _controller.text.length,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            // 空欄は0（未設定）として保存する（_SingleFieldDialogとの相違点）
+            final budget = int.tryParse(_controller.text) ?? 0;
+            Navigator.pop(context);
+            await widget.onSubmit(budget);
+          },
+          child: const Text('保存'),
         ),
       ],
     );
