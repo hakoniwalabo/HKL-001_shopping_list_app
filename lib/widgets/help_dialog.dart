@@ -57,6 +57,13 @@ class HelpDialog extends StatelessWidget {
               description: 'AppBar右上の「⋮」→「リストを削除」\n（最後のリストは削除できません）',
             ),
             _HelpItem(
+              icon: Icons.savings_outlined,
+              label: 'リストの予算を設定',
+              description:
+                  '合計表示の上の「予算 -」（または金額）をタップすると入力欄が開きます\n'
+                  '空欄のまま保存すると未設定（-表示）に戻ります',
+            ),
+            _HelpItem(
               icon: Icons.drive_file_move_outline,
               label: '別リストへ移動',
               description: '商品を長押しするとメニューが表示されます\n「別のリストに移動」で移動先リストを選択、「よく買うものに登録」でよく買うものに追加できます',
