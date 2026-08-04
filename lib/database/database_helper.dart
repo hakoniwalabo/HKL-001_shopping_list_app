@@ -35,7 +35,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -61,7 +61,8 @@ CREATE TABLE items(
 CREATE TABLE lists(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT,
-  createdAt INTEGER
+  createdAt INTEGER,
+  budget INTEGER NOT NULL DEFAULT 0
 )
 ''');
 
@@ -176,6 +177,16 @@ CREATE TABLE IF NOT EXISTS categories (
         try {
           await db.execute(sql);
         } catch (_) {}
+      }
+    }
+
+    if (oldVersion < 8) {
+      try {
+        await db.execute(
+          'ALTER TABLE lists ADD COLUMN budget INTEGER NOT NULL DEFAULT 0',
+        );
+      } catch (_) {
+        // カラムが既に存在する場合は無視
       }
     }
   }
@@ -330,6 +341,17 @@ CREATE TABLE IF NOT EXISTS categories (
     await db.update(
       'lists',
       {'name': newName},
+      where: 'id = ?',
+      whereArgs: [listId],
+    );
+  }
+
+  Future<void> updateListBudget(int listId, int budget) async {
+    final db = await database;
+
+    await db.update(
+      'lists',
+      {'budget': budget},
       where: 'id = ?',
       whereArgs: [listId],
     );
@@ -622,6 +644,7 @@ CREATE TABLE IF NOT EXISTS categories (
         final newId = await txn.insert('lists', {
           'name': resolvedName,
           'createdAt': baseCreatedAt + listInsertIndex,
+          'budget': (list['budget'] as num?)?.toInt() ?? 0,
         });
         listInsertIndex++;
         listIdMap[oldId] = newId;
