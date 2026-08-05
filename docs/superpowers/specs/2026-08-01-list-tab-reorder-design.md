@@ -1,7 +1,7 @@
 # リスト（タブ）並び替え機能 設計書
 
 **作成日：2026-08-01**
-**対象バージョン：** spec rev8.13 の次リビジョン（rev8.14想定）に追加
+**対象バージョン：** spec rev8.14 の次リビジョン（rev8.15想定）に追加
 **ステータス：設計承認済み・未実装**（マスターの指示により、実装計画（writing-plans）の作成はまだ行っていない。実装に進む際は改めて指示を受けること）
 
 ---
@@ -12,7 +12,7 @@
 
 UI表記は直近のコミット（`6a0ffa1`）で「タブ」から「リスト」へ統一されたが、内部実装では複数の買い物リストを `TabBar`（`lib/widgets/list_tab_bar.dart`）で切り替える構造のまま変わっていない。
 
-現状、リストの並び順は `lib/database/database_helper.dart` の `getLists()`（293〜299行目）で `orderBy: 'createdAt ASC'` に固定されており、ユーザーがリストの並び順を変更する手段が存在しない。
+現状、リストの並び順は `lib/database/database_helper.dart` の `getLists()`（304〜310行目）で `orderBy: 'createdAt ASC'` に固定されており、ユーザーがリストの並び順を変更する手段が存在しない。
 
 一方、商品アイテム（`items`）・よく買うもの（`favorites`）・カテゴリ（`categories`）は、いずれもテーブルに `sortOrder` カラムを持ち、`ReorderableListView` 系ウィジェットによるドラッグ並び替えが実装済みである。本設計は、この既存パターンをリスト（`lists`）にも適用し、複数リストの並び順をユーザーが変更できるようにする。
 
@@ -44,9 +44,9 @@ ShoppingListScreen（ConsumerStatefulWidget）
                 └─ DatabaseHelper 経由で currentListId の商品一覧を取得・表示
 ```
 
-重要な前提として、本アプリはリストの一覧・並び順自体を保持する専用の Riverpod Provider を持たない。`shoppingLists` は `_ShoppingListScreenState` のローカル State フィールドであり、`loadLists()`（54〜94行目）内で DB から取得した結果を `setState` で反映している。Riverpod で管理されているのは「現在選択中リストの商品一覧」（`itemProvider`）・`categoryProvider`・`purchaseProvider` のみである。
+重要な前提として、本アプリはリストの一覧・並び順自体を保持する専用の Riverpod Provider を持たない。`shoppingLists` は `_ShoppingListScreenState` のローカル State フィールドであり、`loadLists()`（56〜96行目）内で DB から取得した結果を `setState` で反映している。Riverpod で管理されているのは「現在選択中リストの商品一覧」（`itemProvider`）・`categoryProvider`・`purchaseProvider` のみである。
 
-また、本画面は `TabBarView` や `PageView` を使用しておらず、リスト間の切り替えは `TabBar` のタップ（`_handleTabChange`、460〜480行目）でのみ発生する。スワイプによるページ送りは実装されていない。
+また、本画面は `TabBarView` や `PageView` を使用しておらず、リスト間の切り替えは `TabBar` のタップ（`_handleTabChange`、485〜505行目）でのみ発生する。スワイプによるページ送りは実装されていない。
 
 ### 2.2 変更後の構成
 
@@ -202,7 +202,7 @@ class ListReorderBar extends StatelessWidget implements PreferredSizeWidget {
 bool _isReorderMode = false;
 ```
 
-**AppBar 構成の変更（895〜900行目付近）：**
+**AppBar 構成の変更（`actions`：794〜798行目付近、`bottom`：921〜925行目付近）：**
 
 ```dart
 actions: [
@@ -277,18 +277,18 @@ Future<void> _onReorderList(int oldIndex, int newIndex) async {
 
 #### 3.2.1 DBスキーマ変更
 
-`lib/database/database_helper.dart` の DB バージョンを 7 → 8 に上げる（38行目）。
+`lib/database/database_helper.dart` の DB バージョンを 8 → 9 に上げる（38行目）。version 8 は先行して実装された「リスト予算表示機能」（`budget` カラム追加）で既に使用済みのため、本機能は次に空いている 9 を使用する。
 
 ```dart
 return await openDatabase(
   path,
-  version: 8,
+  version: 9,
   onCreate: _createDB,
   onUpgrade: _onUpgrade,
 );
 ```
 
-`_createDB` 内の `lists` テーブル定義（60〜66行目）に `sortOrder` カラムを追加する。
+`_createDB` 内の `lists` テーブル定義（60〜67行目）に `sortOrder` カラムを追加する。なお、`budget` カラムは前述の予算表示機能により既に追加済みであり、そのまま残す。
 
 ```dart
 await db.execute('''
@@ -296,12 +296,13 @@ CREATE TABLE lists(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT,
   createdAt INTEGER,
+  budget INTEGER NOT NULL DEFAULT 0,
   sortOrder INTEGER NOT NULL DEFAULT 0
 )
 ''');
 ```
 
-初回インストール時のデフォルトリスト作成（68〜71行目）にも `sortOrder: 0` を設定する。
+初回インストール時のデフォルトリスト作成（69〜72行目）にも `sortOrder: 0` を設定する。
 
 ```dart
 await db.insert('lists', {
@@ -311,10 +312,10 @@ await db.insert('lists', {
 });
 ```
 
-`_onUpgrade` に `oldVersion < 8` のマイグレーションブロックを追加する。カラム追加は `favorites`/`items` の既存カラム追加と同様に `ALTER TABLE ... ADD COLUMN` パターン（テーブル再作成は不要。再作成が必要なのは「カラム削除」を伴う場合のみ、というプロジェクト確定ルールに従う）。追加後、既存行には現在の `createdAt ASC` 順に基づく連番（0, 1, 2, …）を初期セットする。
+`_onUpgrade`（96〜192行目）に、既存の `oldVersion < 8`（予算表示機能の `budget` カラム追加、183〜191行目）ブロックに続けて `oldVersion < 9` のマイグレーションブロックを追加する。カラム追加は `favorites`/`items` の既存カラム追加と同様に `ALTER TABLE ... ADD COLUMN` パターン（テーブル再作成は不要。再作成が必要なのは「カラム削除」を伴う場合のみ、というプロジェクト確定ルールに従う）。追加後、既存行には現在の `createdAt ASC` 順に基づく連番（0, 1, 2, …）を初期セットする。
 
 ```dart
-if (oldVersion < 8) {
+if (oldVersion < 9) {
   try {
     await db.execute(
       'ALTER TABLE lists ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0',
@@ -348,12 +349,14 @@ class ShoppingList {
   final int? id;
   final String name;
   final int createdAt;
+  final int budget;
   final int sortOrder;
 
   ShoppingList({
     this.id,
     required this.name,
     int? createdAt,
+    this.budget = 0,
     this.sortOrder = 0,
   }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
@@ -362,6 +365,7 @@ class ShoppingList {
       'id': id,
       'name': name,
       'createdAt': createdAt,
+      'budget': budget,
       'sortOrder': sortOrder,
     };
   }
@@ -371,6 +375,7 @@ class ShoppingList {
       id: map['id'],
       name: map['name'],
       createdAt: map['createdAt'],
+      budget: map['budget'] ?? 0,
       sortOrder: map['sortOrder'] ?? 0,
     );
   }
@@ -379,23 +384,27 @@ class ShoppingList {
     int? id,
     String? name,
     int? createdAt,
+    int? budget,
     int? sortOrder,
   }) {
     return ShoppingList(
       id: id ?? this.id,
       name: name ?? this.name,
       createdAt: createdAt ?? this.createdAt,
+      budget: budget ?? this.budget,
       sortOrder: sortOrder ?? this.sortOrder,
     );
   }
 }
 ```
 
+`budget` フィールドは先行して実装された「リスト予算表示機能」により既に追加済みであり、本設計による変更点は `sortOrder` フィールドおよびその `toMap`/`fromMap`/`copyWith` への反映のみである。
+
 `fromMap` は `map['sortOrder'] ?? 0` としてnullを許容する。これは、マイグレーション未実施の環境（理論上は起こらないが `_onUpgrade` の実行順序に依存しない防御的実装として）を考慮したものであり、`Item.fromMap` が `quantity`/`memo` に対して行っている `?? 1` / `?? ''` と同じ考え方である。
 
 #### 3.2.3 `DatabaseHelper` のCRUDメソッド変更
 
-**`getLists()`（293〜299行目）：** `orderBy` を `createdAt ASC` から `sortOrder ASC` に変更する。
+**`getLists()`（304〜310行目）：** `orderBy` を `createdAt ASC` から `sortOrder ASC` に変更する。
 
 ```dart
 Future<List<ShoppingList>> getLists() async {
@@ -407,7 +416,7 @@ Future<List<ShoppingList>> getLists() async {
 }
 ```
 
-**`insertList()`（301〜305行目）：** `favorites`/`categories` の新規追加と同じ「`SELECT MAX(sortOrder) as maxOrder` → `maxOrder + 1`」パターンでsortOrderを採番する。呼び出し元（`_showAddListDialog`）が渡す `ShoppingList(name: name)` の `sortOrder`（デフォルト0）は使用せず、DB側で採番し直す。
+**`insertList()`（312〜316行目）：** `favorites`/`categories` の新規追加と同じ「`SELECT MAX(sortOrder) as maxOrder` → `maxOrder + 1`」パターンでsortOrderを採番する。呼び出し元（`_showAddListDialog`）が渡す `ShoppingList(name: name)` の `sortOrder`（デフォルト0）は使用せず、DB側で採番し直す。
 
 ```dart
 Future<int> insertList(ShoppingList list) async {
@@ -426,7 +435,7 @@ Future<int> insertList(ShoppingList list) async {
 }
 ```
 
-**`updateListOrder()`（新規）：** 並び替え確定用。`items` の並び替え保存（`updateSortOrders`、246〜263行目）と同じ、トランザクション＋バッチ更新のパターンを踏襲する。
+**`updateListOrder()`（新規）：** 並び替え確定用。`items` の並び替え保存（`updateSortOrders`、257〜274行目）と同じ、トランザクション＋バッチ更新のパターンを踏襲する。
 
 ```dart
 Future<void> updateListOrder(List<ShoppingList> lists) async {
@@ -449,7 +458,7 @@ Future<void> updateListOrder(List<ShoppingList> lists) async {
 }
 ```
 
-**`duplicateList()`（339〜367行目）：** 現状は `sortOrder` を設定せずに `INSERT` しているため、このままでは複製されたリストが常に `sortOrder=0`（デフォルト値）となり、既存リストの先頭に割り込んでしまう。新規リスト作成と同様に `MAX(sortOrder) + 1` を採番するよう修正する。
+**`duplicateList()`（361〜389行目）：** 現状は `sortOrder` を設定せずに `INSERT` しているため、このままでは複製されたリストが常に `sortOrder=0`（デフォルト値）となり、既存リストの先頭に割り込んでしまう。新規リスト作成と同様に `MAX(sortOrder) + 1` を採番するよう修正する。
 
 ```dart
 Future<int> duplicateList(int sourceListId, String newName) async {
@@ -488,10 +497,11 @@ Future<int> duplicateList(int sourceListId, String newName) async {
 }
 ```
 
-**`importData()`（539〜687行目）内の `lists` INSERT（607〜628行目付近）：** 既存の確定ルール「インポート処理でバックアップのメタデータ（`createdAt` 等）を流用せず、現在のDB最大値+連番を設定する」を `sortOrder` にも適用する。`createdAt` について既に行っている「既存リスト中の最大値+連番」と同じ考え方で、`sortOrder` も現在のDB最大値+連番を採番する。これにより、インポートされたリストの並び順がバックアップ時の `sortOrder` 値に引きずられて既存リストと衝突する（同じ `sortOrder` を持つ行が複数できる）事態を防ぐ。
+**`importData()`（561〜710行目）内の `lists` INSERT（629〜651行目付近）：** 既存の確定ルール「インポート処理でバックアップのメタデータ（`createdAt` 等）を流用せず、現在のDB最大値+連番を設定する」を `sortOrder` にも適用する。`createdAt` について既に行っている「既存リスト中の最大値+連番」と同じ考え方で、`sortOrder` も現在のDB最大値+連番を採番する。これにより、インポートされたリストの並び順がバックアップ時の `sortOrder` 値に引きずられて既存リストと衝突する（同じ `sortOrder` を持つ行が複数できる）事態を防ぐ。なお `budget` は先行して実装された予算表示機能により既に `(list['budget'] as num?)?.toInt() ?? 0` として採用済みであり、この扱いは変更しない。
 
 ```dart
 // lists INSERT
+// 既存リスト中の最大 createdAt を取得して、インポートリストが必ず右端に並ぶようにする
 final maxCreatedAtResult = await txn.rawQuery(
   'SELECT MAX(createdAt) as maxAt FROM lists',
 );
@@ -515,6 +525,7 @@ for (final list in incomingLists) {
   final newId = await txn.insert('lists', {
     'name': resolvedName,
     'createdAt': baseCreatedAt + listInsertIndex,
+    'budget': (list['budget'] as num?)?.toInt() ?? 0,
     'sortOrder': nextListSortOrder++,
   });
   listInsertIndex++;
@@ -532,7 +543,7 @@ for (final list in incomingLists) {
 
 `_tabController` は `shoppingLists` の**インデックス**に基づいてどのタブが選択中かを管理しており、`TabController` オブジェクト自体は `loadLists()`（リストの追加・削除・リネーム・インポート時）でのみ再生成される。並び替え操作では `_tabController` を再生成しないため、並び替えモードをOFFにして `ListTabBar` の表示に戻した際、`_tabController.index` が `currentListId` の新しい位置とズレたままになる可能性がある。
 
-このズレを防ぐため、`_toggleReorderMode()` でモードをOFFにするタイミングで、`shoppingLists.indexWhere((e) => e.id == currentListId)` を再計算し、`_tabController.index` と食い違っていれば `_tabController.animateTo(...)` で補正する（§3.1.4 参照）。この考え方は `loadLists()` 内で行っている `currentIndex` の算出ロジック（64〜77行目）と同じである。
+このズレを防ぐため、`_toggleReorderMode()` でモードをOFFにするタイミングで、`shoppingLists.indexWhere((e) => e.id == currentListId)` を再計算し、`_tabController.index` と食い違っていれば `_tabController.animateTo(...)` で補正する（§3.1.4 参照）。この考え方は `loadLists()` 内で行っている `currentIndex` の算出ロジック（66〜79行目）と同じである。
 
 なお、並び替えモード中は `ListTabBar` 自体を描画しないため、ドラッグ中に `_handleTabChange`（`TabController` の `indexIsChanging` リスナー）が誤発火することはない。
 
@@ -575,11 +586,11 @@ for (final list in incomingLists) {
   ),
   ```
 
-- **生きた設計書の更新：** `docs/spec_HKL-001_shopping_list_app_rev8.13.md` を rev8.14 へ更新する。`updating-rev-numbered-specs` スキルの手順に従い、以下を同一コミットで行う。
-  1. 現行の `docs/spec_HKL-001_shopping_list_app_rev8.13.md` を `docs/_old/spec_HKL-001_shopping_list_app_rev8.13.md` へコピーして保存する
-  2. 本文（変更履歴テーブルへの追記、冒頭「Rev 8.13」→「Rev 8.14」表記の更新、システム構成図・DBスキーマ節等の該当箇所の更新）を編集する
-  3. `git mv docs/spec_HKL-001_shopping_list_app_rev8.13.md docs/spec_HKL-001_shopping_list_app_rev8.14.md` でファイル名をリネームする（内容編集と同一コミットに含める）
-  4. リネーム後、ファイル内に「rev8.13」「Rev 8.13」等、古いリビジョンへの自己言及が残っていないか grep で確認する
+- **生きた設計書の更新：** `docs/spec_HKL-001_shopping_list_app_rev8.14.md` を rev8.15 へ更新する。`updating-rev-numbered-specs` スキルの手順に従い、以下を同一コミットで行う。
+  1. 現行の `docs/spec_HKL-001_shopping_list_app_rev8.14.md` を `docs/_old/spec_HKL-001_shopping_list_app_rev8.14.md` へコピーして保存する
+  2. 本文（変更履歴テーブルへの追記、冒頭「Rev 8.14」→「Rev 8.15」表記の更新、システム構成図・DBスキーマ節等の該当箇所の更新）を編集する
+  3. `git mv docs/spec_HKL-001_shopping_list_app_rev8.14.md docs/spec_HKL-001_shopping_list_app_rev8.15.md` でファイル名をリネームする（内容編集と同一コミットに含める）
+  4. リネーム後、ファイル内に「rev8.14」「Rev 8.14」等、古いリビジョンへの自己言及が残っていないか grep で確認する
 
 - **インポート処理の確定ルール順守：** `importData()` での `lists` 復元時、`sortOrder` をバックアップのメタデータから流用せず、現在のDB最大値+連番で設定する（§3.2.3参照）。既存の `createdAt` に対する扱いと同じ考え方である。
 
@@ -619,12 +630,12 @@ for (final list in incomingLists) {
 
 | ファイル | 変更内容 |
 |---|---|
-| `lib/database/database_helper.dart` | DBバージョン 7→8、`lists` テーブルへ `sortOrder` カラム追加、`_onUpgrade` にマイグレーション追加、`getLists()` の `orderBy` 変更、`insertList()`／`duplicateList()` の採番ロジック追加、`updateListOrder()` 新規追加、`importData()` の `lists` INSERT に `sortOrder` 採番を追加 |
+| `lib/database/database_helper.dart` | DBバージョン 8→9、`lists` テーブルへ `sortOrder` カラム追加、`_onUpgrade` にマイグレーション追加、`getLists()` の `orderBy` 変更、`insertList()`／`duplicateList()` の採番ロジック追加、`updateListOrder()` 新規追加、`importData()` の `lists` INSERT に `sortOrder` 採番を追加 |
 | `lib/models/shopping_list.dart` | `sortOrder` フィールド・`toMap`/`fromMap`/`copyWith` 追加 |
 | `lib/widgets/list_management_buttons.dart` | 並び替えモードトグルボタン（`onToggleReorderMode`・`isReorderMode`）を追加 |
 | `lib/widgets/list_reorder_bar.dart` | 新規追加（水平 `ReorderableListView.builder` によるリスト並び替えUI） |
 | `lib/widgets/list_tab_bar.dart` | 変更なし |
 | `lib/screens/shopping_list_screen.dart` | `_isReorderMode` State追加、`_toggleReorderMode()`／`_onReorderList()` 追加、AppBar構成の分岐追加 |
 | `lib/widgets/help_dialog.dart` | 「リストの並び替え」操作説明を追加 |
-| `docs/spec_HKL-001_shopping_list_app_rev8.13.md` | rev8.14へ更新・リネーム（`docs/spec_HKL-001_shopping_list_app_rev8.14.md`）、旧版を `docs/_old/` へ保存 |
+| `docs/spec_HKL-001_shopping_list_app_rev8.14.md` | rev8.15へ更新・リネーム（`docs/spec_HKL-001_shopping_list_app_rev8.15.md`）、旧版を `docs/_old/` へ保存 |
 | `test/shopping_list_test.dart` | 新規追加（`ShoppingList` モデルの単体テスト） |
