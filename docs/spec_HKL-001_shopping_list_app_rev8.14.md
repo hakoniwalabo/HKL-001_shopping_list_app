@@ -30,7 +30,7 @@
 | 8.11 | 2026-08-01    | 税込価格ラベルの「（任意）」表記を撤回し「税込価格」に戻した（カテゴリ欄と同様の任意表記スタイルは採用しないことに変更）                                                         |     |
 | 8.12 | 2026-08-01    | 税込価格（単価）が0円の場合、メインリスト（`item_tile.dart`）は「単価: -」「税込合計: -」、よく買うものリスト（`favorites_screen.dart`）は「個数 × -」と表示するよう変更（従来はメインリストで「¥0」表示、よく買うものリストは価格欄自体を省略していた）                                                         |     |
 | 8.13 | 2026-08-01    | UI表記の「タブ」を「リスト」に統一（タブ名変更ダイアログ・別リストへ移動メニュー・ヘルプ文言）。設計書内の対応する記述も同様に更新（`TabBar`/`TabController` 等のウィジェット名は変更なし）                                                         |     |
-| 8.14 | 2026-08-04    | リストごとの予算表示機能を追加（`ShoppingList` に `budget` フィールド追加・`lists` テーブルに `budget` カラム追加（DB v8）・`BudgetSummary` ウィジェット新規追加・`TotalSummary` 直上に配置・タップで予算入力ダイアログを開き設定）。付随変更として `TotalSummary`（未購入合計／購入済合計）を0円時ハイフン表示に統一（`item_tile.dart` の単価0円時ハイフン表示と統一）                                                         |     |
+| 8.14 | 2026-08-04    | リストごとの予算表示機能を追加（`ShoppingList` に `budget` フィールド追加・`lists` テーブルに `budget` カラム追加（DB v8）・`BudgetSummary` ウィジェット新規追加・`TotalSummary` 直上・画面左端に配置・タップで予算入力ダイアログを開き設定。入力欄は現在値（未設定時は`0`）を初期表示）。付随変更として `TotalSummary`（未チェック合計／チェック済合計）を0円時ハイフン表示に統一（`item_tile.dart` の単価0円時ハイフン表示と統一）。UI表記「未購入」「購入済」を「未チェック」「チェック済」へ全面的に統一（リストのセクション見出し・合計表示・共有テキスト・ヘルプ文言・削除確認ダイアログ等。広告なし購入（IAP）を指す「購入済み」表記は対象外）                                                         |     |
 
 ---
 
@@ -40,7 +40,7 @@
 
 Flutter + Riverpod + SQLite(sqflite) を使用したローカル保存型の買い物リストアプリ。
 
-複数リスト管理、商品名候補表示、購入済み管理、Undo復元、並び替え、税込計算などを備える。
+複数リスト管理、商品名候補表示、チェック済み管理、Undo復元、並び替え、税込計算などを備える。
 
 ---
 
@@ -146,7 +146,7 @@ lib/
 | 商品編集 | 既存商品編集 |
 | 商品削除 | スワイプ削除 |
 | Undo | 削除復元 |
-| 購入済み切替 | Checkbox |
+| チェック済み切替 | Checkbox |
 | 並び替え | ReorderableListView |
 | リスト切替 | TabBar |
 | リスト追加 | 新規リスト追加（上限：最大10リスト） |
@@ -154,11 +154,11 @@ lib/
 | リスト名変更 | 長押しで名前編集 |
 | 商品名候補表示 | 商品名入力欄（追加・編集／よく買うもの直接登録）にフォーカスがある状態で1文字以上入力すると、現在のリスト内またはよく買うもの一覧内の既存商品名から大文字小文字を区別しない部分一致で最大8件をリアルタイム表示。DB永続化なし・頻度順表示ではない（空文字時は非表示） |
 | リストごとの予算表示 | リストごとに予算額を設定・表示（TotalSummary直上に固定表示。タップで入力ダイアログを開く。0円＝未設定として「予算 -」表示） |
-| 合計表示 | 税込合計（タブ直下固定表示。未購入/購入済みを並列表示。それぞれ0円のときは「未購入 -」「購入済 -」と表示） |
+| 合計表示 | 税込合計（タブ直下固定表示。未チェック/チェック済みを並列表示。それぞれ0円のときは「未チェック -」「チェック済 -」と表示） |
 | 別リストへ移動 | 商品を長押しして移動先リストを選択 |
 | リスト複製 | 現在のリストを全商品コピーで複製（チェック状態リセット・同名時は連番付与） |
 | テキスト共有 | リスト内容をテキスト化してOS標準共有シートで送信（読むだけ・取り込み不可） |
-| リストを共有（読み込み用） | 現在のリスト1件を未購入アイテムのみで version:1 形式ファイル化し共有シートで送信。受信側は「読み込む」で取り込める |
+| リストを共有（読み込み用） | 現在のリスト1件を未チェックアイテムのみで version:1 形式ファイル化し共有シートで送信。受信側は「読み込む」で取り込める |
 | よく買うものから追加 | AppBar ♡ ボタンからよく買う商品を登録・管理し、選択して現在のリストに一括追加 |
 | カテゴリを管理 | ⋮ メニュー→「カテゴリを管理」からカテゴリ作成・削除・使用数確認。商品追加・編集ダイアログでカテゴリを設定すると、リストがカテゴリ別セクション表示に切り替わる |
 | バックアップ | 全データ（lists・items・favorites・categories）をJSONファイル化。タップ後「共有」「端末に保存」を選択（端末保存は file_picker saveFile） |
@@ -193,11 +193,11 @@ Scaffold
  ├─ 合計表示（TotalSummary・ListView 外・TabBar 直下に固定）
  │
  ├─ ListView
- │   ├─ カテゴリなし商品（未購入）                 ← カテゴリ別表示
- │   ├─ カテゴリAセクション（未購入）               ← カテゴリ別表示
- │   ├─ カテゴリBセクション（未購入）               ← カテゴリ別表示
+ │   ├─ カテゴリなし商品（未チェック）                 ← カテゴリ別表示
+ │   ├─ カテゴリAセクション（未チェック）               ← カテゴリ別表示
+ │   ├─ カテゴリBセクション（未チェック）               ← カテゴリ別表示
  │   ├─ Divider
- │   └─ 購入済みセクション（カテゴリ混在・フラット表示）
+ │   └─ チェック済みセクション（カテゴリ混在・フラット表示）
  │
  ├─ FloatingActionButton（商品追加専用）
  │
@@ -224,7 +224,7 @@ Scaffold
 | id | INTEGER | PK |
 | name | TEXT | 商品名 |
 | price | INTEGER | 税込単価 |
-| isChecked | INTEGER | 購入済み |
+| isChecked | INTEGER | チェック済み |
 | createdAt | INTEGER | 作成日時 |
 | sortOrder | INTEGER | 並び順（新規追加時: MAX(sortOrder)+1） |
 | quantity | INTEGER | 個数 |
@@ -396,7 +396,7 @@ SnackBar Action → restoreItemWithOrder() → insertItemWithId() → sortOrder�
 
 ### 8.5 並び替え機能
 
-未購入商品のみドラッグ移動可能。sortOrder（昇順）で表示。
+未チェック商品のみドラッグ移動可能。sortOrder（昇順）で表示。
 
 ```
 ドラッグ → reorderUncheckedItems() → sortOrder更新 → DB保存
@@ -404,9 +404,9 @@ SnackBar Action → restoreItemWithOrder() → insertItemWithId() → sortOrder�
 
 ---
 
-### 8.6 購入済み切替
+### 8.6 チェック済み切替
 
-Checkboxで購入済み状態を変更。
+Checkboxでチェック済み状態を変更。
 
 | 状態 | 表示 |
 |------|------|
@@ -415,9 +415,9 @@ Checkboxで購入済み状態を変更。
 
 ---
 
-### 8.7 購入済み一括削除
+### 8.7 チェック済み一括削除
 
-購入済み商品を全削除する。確認Dialogあり。Undo対応（複数件）。
+チェック済み商品を全削除する。確認Dialogあり。Undo対応（複数件）。
 
 #### Undo仕様
 
@@ -435,8 +435,8 @@ Checkboxで購入済み状態を変更。
 
 | 項目 | 計算式 |
 |------|--------|
-| 未購入合計 | `sum(price × quantity)`（isChecked=false の商品のみ） |
-| 購入済合計 | `sum(price × quantity)`（isChecked=true の商品のみ） |
+| 未チェック合計 | `sum(price × quantity)`（isChecked=false の商品のみ） |
+| チェック済合計 | `sum(price × quantity)`（isChecked=true の商品のみ） |
 
 `price` は税込単価として保存されているため、合計計算は `price × quantity` のみ。
 
@@ -497,7 +497,7 @@ void _updateSuggestions(String text) {
 | 名前変更 | 長押しでリネーム |
 | 切替 | TabBar |
 | 複製 | 現在リストの全アイテムをコピーして新規リスト作成。チェック状態は全件リセット。同名リストが存在する場合は末尾に `(2)` `(3)` を自動付与 |
-| テキスト共有 | 未購入・購入済み全アイテムをテキスト整形して `Share.share()` で送信。アイテムが0件の場合は SnackBar を表示してキャンセル |
+| テキスト共有 | 未チェック・チェック済み全アイテムをテキスト整形して `Share.share()` で送信。アイテムが0件の場合は SnackBar を表示してキャンセル |
 
 #### リスト上限チェック
 
@@ -604,9 +604,9 @@ lists・items・favorites・categories の全データ（または現在リス�
 
 #### リスト共有（読み込み用）
 
-現在表示中のリスト1件を version:2 形式（`lists`=1件・`items`=未購入のみ・`favorites`=空・`categories`=関連カテゴリ）で書き出し共有シートに渡す。
+現在表示中のリスト1件を version:2 形式（`lists`=1件・`items`=未チェックのみ・`favorites`=空・`categories`=関連カテゴリ）で書き出し共有シートに渡す。
 
-- **購入済（isChecked=1）アイテムは含めない**（未購入のものだけを送る）
+- **チェック済（isChecked=1）アイテムは含めない**（未チェックのものだけを送る）
 - 共有できる商品が0件の場合は SnackBar「共有できる商品がありません」を表示してキャンセル
 - ファイル名: `shoppinglist_<リスト名>_YYYYMMDD.json`（リスト名はファイル名禁止文字をサニタイズ・空なら `list`）
 - 受信側は専用メニューを設けず、既存「読み込む（バックアップ／共有リスト）」で取り込む
@@ -661,9 +661,9 @@ lists・items・favorites・categories の全データ（または現在リス�
 
 ⋮ メニュー →「リストを共有（読み込み用）」タップ
 → BackupService.shareList(listId, listName)
-    → 対象リストと未購入アイテムのみを version:2 形式（favorites=[]）で生成
+    → 対象リストと未チェックアイテムのみを version:2 形式（favorites=[]）で生成
     → 一時ファイルに保存 → Share.shareXFiles で共有シート表示 → 後始末で削除
-    → 未購入0件なら共有せず SnackBar「共有できる商品がありません」
+    → 未チェック0件なら共有せず SnackBar「共有できる商品がありません」
 ```
 
 #### インポート処理フロー
@@ -690,7 +690,7 @@ lists・items・favorites・categories の全データ（または現在リス�
 
 | ケース | 対応 |
 |--------|------|
-| 共有対象リストが空（未購入0件） | SnackBar「共有できる商品がありません」（共有しない） |
+| 共有対象リストが空（未チェック0件） | SnackBar「共有できる商品がありません」（共有しない） |
 | ファイル選択キャンセル | 何もしない |
 | 端末保存キャンセル | 何もしない |
 | 端末保存失敗 | SnackBar「保存に失敗しました」（`e.toString()` は使わない） |
@@ -707,7 +707,7 @@ lists・items・favorites・categories の全データ（または現在リス�
 | _serialize | `static Future<String> _serialize({int? onlyListId, bool excludeChecked = false})` | 全データ（または指定リストのみ）を version:2 JSON 文字列化。共通化のための内部メソッド |
 | export | `static Future<void> export()` | 全データを JSON ファイルとして共有シートに渡す |
 | saveToDevice | `static Future<bool> saveToDevice()` | 全データを端末に保存（saveFile）。保存=true・キャンセル=false |
-| shareList | `static Future<bool> shareList(int listId, String listName)` | 指定リストを未購入のみで共有シートに渡す。共有商品0件なら false |
+| shareList | `static Future<bool> shareList(int listId, String listName)` | 指定リストを未チェックのみで共有シートに渡す。共有商品0件なら false |
 | import | `static Future<ImportResult?> import()` | ファイル選択（FileType.any）→マージINSERT。キャンセル時は null |
 | parseAndValidate | `static Map<String, dynamic> parseAndValidate(String content)` | JSON パースとバリデーション（テスト可能） |
 
@@ -722,11 +722,11 @@ lists・items・favorites・categories の全データ（または現在リス�
 
 ### 8.13 リストごとの予算表示機能
 
-リストごとに「今回はいくらまで買うか」という目安を設定・確認できる。予算額と未購入合計を並べて見比べられるようにする表示専用の機能で、超過警告・残額計算・色分けは行わない（スコープ外・意図的なYAGNI）。
+リストごとに「今回はいくらまで買うか」という目安を設定・確認できる。予算額と未チェック合計を並べて見比べられるようにする表示専用の機能で、超過警告・残額計算・色分けは行わない（スコープ外・意図的なYAGNI）。
 
 - `ShoppingList.budget`（`int`、DB上は `lists.budget INTEGER NOT NULL DEFAULT 0`）にリストごとの予算額を保持する。`0` は「未設定」として扱い、`null` は使用しない
-- `BudgetSummary` ウィジェットが `TotalSummary`（未購入/購入済合計）の直上に独立した1行として表示される。`budget == 0` のとき「予算 -」、それ以外は「予算 ¥{カンマ区切り}」と表示する
-- `BudgetSummary` をタップすると予算入力ダイアログ（`_BudgetInputDialog`）が開く。数値のみ入力可（`FilteringTextInputFormatter.digitsOnly`）。空欄のまま保存すると `0`（未設定）に戻る
+- `BudgetSummary` ウィジェットが `TotalSummary`（未チェック/チェック済合計）の直上・画面左端に独立した1行として表示される（`Align(alignment: Alignment.centerLeft)`）。`budget == 0` のとき「予算 -」、それ以外は「予算 ¥{カンマ区切り}」と表示する
+- `BudgetSummary` をタップすると予算入力ダイアログ（`_BudgetInputDialog`）が開く。数値のみ入力可（`FilteringTextInputFormatter.digitsOnly`）。入力欄には現在値（未設定時は `0`）を常に初期表示し、タップで全選択されるため上書き入力しやすい。空欄のまま保存すると `0`（未設定）に戻る
 - 保存操作は `DatabaseHelper.updateListBudget(listId, budget)` → `loadLists()` で再同期、というリスト名変更（`_showRenameListDialog`）と同一の流れを踏襲する。保存失敗時は汎用文言のSnackBar「予算の保存に失敗しました」を表示し、`loadLists()` でDBの実値に再同期する
 - バックアップ（JSONエクスポート/インポート）は `toMap()`/`fromMap()` 経由のため `budget` も自動的にバックアップ対象になる。旧バージョン（`budget` キーを含まない）のバックアップをインポートした場合は `0`（未設定）にフォールバックする
 
@@ -740,7 +740,7 @@ lists・items・favorites・categories の全データ（または現在リス�
 |-----------|-----|------|
 | name | String | 商品名 |
 | price | int | 税込単価 |
-| isChecked | bool | 購入済み（デフォルト: false） |
+| isChecked | bool | チェック済み（デフォルト: false） |
 | id | int? | PK（自動採番） |
 | createdAt | int | 作成日時（UnixミリS） |
 | sortOrder | int | 並び順（デフォルト: 0） |
@@ -793,7 +793,7 @@ lists・items・favorites・categories の全データ（または現在リス�
 | `_serialize()` | 全データ／指定リストを version:2 JSON 文字列化（共通化） |
 | `export()` | 全データを JSON ファイルとして共有シートに渡す |
 | `saveToDevice()` | 全データを端末に保存（file_picker saveFile・SAF） |
-| `shareList()` | 指定リストを未購入のみで共有シートに渡す |
+| `shareList()` | 指定リストを未チェックのみで共有シートに渡す |
 | `import()` | ファイル選択（FileType.any）→バリデーション→マージINSERT |
 | `parseAndValidate()` | JSON文字列のパースとバリデーション |
 
@@ -980,11 +980,11 @@ if (!mounted) return;
 - よく買うもの登録・一括追加・検索（絞り込み表示）
 - カテゴリ管理（作成・削除）とカテゴリ別セクション表示
 - バックアップ・機種変更引継ぎ（JSONエクスポート/インポート・共有/端末保存）
-- アプリ同士のリスト共有（未購入のみ・version:2形式・読み込み統合）
+- アプリ同士のリスト共有（未チェックのみ・version:2形式・読み込み統合）
 - Material3 UI
 - 並び替え対応
 - 税込単価保存（price = 税込）・合計 = sum(price × quantity)
-- 購入済み管理
+- チェック済み管理
 - リスト削除時 CASCADE 処理
 - AdMob バナー広告（画面下部固定・本番ID）
 - 広告なし買い切りアップグレード（IAP: `remove_ads`）
