@@ -99,7 +99,7 @@ class BackupService {
     return path != null;
   }
 
-  /// 指定リスト1件を未購入アイテムのみで共有シートに渡す。
+  /// 指定リスト1件を未チェックアイテムのみで共有シートに渡す。
   /// 共有できる商品が無い場合は false を返す。
   static Future<bool> shareList(int listId, String listName) async {
     final helper = DatabaseHelper.instance;

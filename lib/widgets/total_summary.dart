@@ -6,7 +6,7 @@ import '../models/item.dart';
 /// 税込合計の表示ウィジェット（タブ直下固定）
 ///
 /// price は税込単価として保存されているため、合計 = sum(price × quantity)。
-/// 未購入合計／購入済合計が0円のときは「未購入 -」「購入済 -」と表示する。
+/// 未チェック合計／チェック済合計が0円のときは「未チェック -」「チェック済 -」と表示する。
 class TotalSummary extends StatelessWidget {
   final List<Item> items;
 
@@ -24,9 +24,9 @@ class TotalSummary extends StatelessWidget {
     final uncheckedSum = _sum(unchecked);
     final checkedSum = _sum(checked);
     final uncheckedText =
-        uncheckedSum > 0 ? '未購入 ¥${fmt.format(uncheckedSum)}' : '未購入 -';
+        uncheckedSum > 0 ? '未チェック ¥${fmt.format(uncheckedSum)}' : '未チェック -';
     final checkedText =
-        checkedSum > 0 ? '購入済 ¥${fmt.format(checkedSum)}' : '購入済 -';
+        checkedSum > 0 ? 'チェック済 ¥${fmt.format(checkedSum)}' : 'チェック済 -';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),

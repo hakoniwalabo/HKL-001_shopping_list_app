@@ -28,18 +28,18 @@ class HelpDialog extends StatelessWidget {
             ),
             _HelpItem(
               icon: Icons.check_circle_outline,
-              label: '購入済みにする',
+              label: 'チェック済みにする',
               description: 'チェックボックスをタップ',
             ),
             _HelpItem(
               icon: Icons.delete_sweep,
-              label: '購入済みを一括削除',
-              description: '「購入済み削除」ボタンを押して確認後に削除\nUndoで一括復元もできます',
+              label: 'チェック済みを一括削除',
+              description: '「チェック済み削除」ボタンを押して確認後に削除\nUndoで一括復元もできます',
             ),
             _HelpItem(
               icon: Icons.drag_handle,
               label: '並び替え',
-              description: '未購入商品の右端のハンドルをドラッグ',
+              description: '未チェック商品の右端のハンドルをドラッグ',
             ),
             _HelpItem(
               icon: Icons.touch_app,
@@ -91,7 +91,7 @@ class HelpDialog extends StatelessWidget {
             _HelpItem(
               icon: Icons.send_outlined,
               label: 'リストを共有（読み込み用）',
-              description: 'AppBar右上の「⋮」→「リストを共有（読み込み用）」\n未購入商品をJSONファイルとして送信。受け取った側は「読み込む」から取り込めます',
+              description: 'AppBar右上の「⋮」→「リストを共有（読み込み用）」\n未チェック商品をJSONファイルとして送信。受け取った側は「読み込む」から取り込めます',
             ),
             _HelpItem(
               icon: Icons.backup_outlined,

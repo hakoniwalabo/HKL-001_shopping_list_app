@@ -179,13 +179,13 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
     final uncheckedTotal = unchecked.fold(0, (s, e) => s + e.price * e.quantity);
     final checkedTotal = checked.fold(0, (s, e) => s + e.price * e.quantity);
-    if (uncheckedTotal > 0) buf.writeln('未購入合計: ¥${fmt.format(uncheckedTotal)}');
-    if (checkedTotal > 0) buf.writeln('購入済合計: ¥${fmt.format(checkedTotal)}');
+    if (uncheckedTotal > 0) buf.writeln('未チェック合計: ¥${fmt.format(uncheckedTotal)}');
+    if (checkedTotal > 0) buf.writeln('チェック済合計: ¥${fmt.format(checkedTotal)}');
 
     await Share.share(buf.toString());
   }
 
-  /// 現在のリストを未購入のみで「読み込み用ファイル」として共有する
+  /// 現在のリストを未チェックのみで「読み込み用ファイル」として共有する
   Future<void> _shareListFile() async {
     final currentList = shoppingLists.firstWhere(
       (e) => e.id == currentListId,
@@ -545,9 +545,9 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
       builder: (context) {
         return AlertDialog(
-          title: const Text('購入済みを削除'),
+          title: const Text('チェック済みを削除'),
 
-          content: const Text('購入済みの商品をすべて削除しますか？'),
+          content: const Text('チェック済みの商品をすべて削除しますか？'),
 
           actions: [
             TextButton(
@@ -692,7 +692,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     if (categories.isEmpty) {
       return [
         ListSection(
-          title: '未購入',
+          title: '未チェック',
           items: unchecked,
           reorderable: true,
           numberFormat: numberFormat,
@@ -936,17 +936,20 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
               // 予算表示（TotalSummary直上・設計書 docs/superpowers/specs/2026-08-04-budget-display-design.md §3.2.2）
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: BudgetSummary(
-                  budget: shoppingLists
-                      .firstWhere(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: BudgetSummary(
+                    budget: shoppingLists
+                        .firstWhere(
+                          (e) => e.id == currentListId,
+                          orElse: () => ShoppingList(name: '買い物リスト'),
+                        )
+                        .budget,
+                    onTap: () => _showBudgetInputDialog(
+                      shoppingLists.firstWhere(
                         (e) => e.id == currentListId,
                         orElse: () => ShoppingList(name: '買い物リスト'),
-                      )
-                      .budget,
-                  onTap: () => _showBudgetInputDialog(
-                    shoppingLists.firstWhere(
-                      (e) => e.id == currentListId,
-                      orElse: () => ShoppingList(name: '買い物リスト'),
+                      ),
                     ),
                   ),
                 ),
@@ -977,7 +980,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                                   child: FilledButton.tonalIcon(
                                     onPressed: _showDeleteCheckedDialog,
                                     icon: const Icon(Icons.delete_sweep),
-                                    label: const Text('購入済み削除'),
+                                    label: const Text('チェック済み削除'),
                                   ),
                                 ),
                               ),
@@ -991,7 +994,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
                             const Divider(thickness: 1.5),
 
                             ListSection(
-                              title: '購入済',
+                              title: 'チェック済',
 
                               items: checked,
 
@@ -1180,10 +1183,7 @@ class _BudgetInputDialogState extends State<_BudgetInputDialog> {
   @override
   void initState() {
     super.initState();
-    // budget == 0（未設定）のときは空文字、それ以外は現在値を初期表示する
-    _controller = TextEditingController(
-      text: widget.initialBudget == 0 ? '' : '${widget.initialBudget}',
-    );
+    _controller = TextEditingController(text: '${widget.initialBudget}');
   }
 
   @override
