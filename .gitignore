@@ -62,3 +62,6 @@ app.*.map.json
 /docs/*production_access*
 /docs/*play_console*
 /docs/*playconsole*
+
+# ブログ記事ドラフト - DO NOT COMMIT
+/docs/*blog_draft*
