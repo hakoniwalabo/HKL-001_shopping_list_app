@@ -8,7 +8,7 @@ lib/
 ├── models/
 │   ├── item.dart                      # 商品データモデル
 │   ├── category.dart                  # カテゴリデータモデル
-│   └── shopping_list.dart             # リストデータモデル
+│   └── shopping_list.dart             # リストデータモデル（budgetフィールドあり）
 ├── database/
 │   └── database_helper.dart           # SQLite永続化層（items / lists / favorites / categories）
 ├── providers/
@@ -18,17 +18,21 @@ lib/
 ├── services/
 │   └── backup_service.dart            # バックアップ・インポート・リスト共有（JSONファイルI/O）
 ├── screens/
-│   └── shopping_list_screen.dart      # メイン画面
+│   ├── shopping_list_screen.dart      # メイン画面
+│   └── favorites_screen.dart          # よく買うもの管理（全画面）
+├── utils/
+│   ├── favorites_section_helper.dart  # よく買うものカテゴリ別セクション生成（純粋関数）
+│   └── purchase_resolution.dart       # 広告なし状態の判定ロジック（純粋関数）
 └── widgets/
     ├── add_item_dialog.dart           # 商品追加・編集ダイアログ（連続追加対応）
     ├── ad_banner.dart                 # バナー広告
+    ├── budget_summary.dart            # リストごとの予算表示
     ├── category_management_dialog.dart # カテゴリ管理ダイアログ
     ├── empty_state_view.dart          # 空リスト表示
-    ├── favorites_dialog.dart          # よく買うもの管理（検索・並べ替え・カテゴリ対応）
     ├── help_dialog.dart               # 使い方ダイアログ
     ├── item_tile.dart                 # 商品リスト行
     ├── list_management_buttons.dart   # AppBarのリスト追加・複製ボタン群
-    ├── list_section.dart              # カテゴリ別／未購入・購入済みセクション
+    ├── list_section.dart              # カテゴリ別／未チェック・チェック済セクション
     ├── list_tab_bar.dart              # タブバー
     ├── total_summary.dart             # 合計金額表示
     ├── upgrade_dialog.dart            # 課金ダイアログ
@@ -39,7 +43,7 @@ lib/
         └── memo_field.dart            # メモ入力
 ```
 
-状態管理は **Riverpod（AsyncNotifier）**、永続化は **sqflite（SQLite）** を採用しています。加えて、バックアップ・共有機能のためにファイルI/Oを担う `services/` 層が追加され、UI・状態・データベース・外部ファイルI/Oの4層構造になっています。
+状態管理は **Riverpod（AsyncNotifier）**、永続化は **sqflite（SQLite）** を採用しています。加えて、バックアップ・共有機能のためにファイルI/Oを担う `services/` 層、DB・Riverpodに依存しない純粋関数をまとめる `utils/` 層が追加され、UI・状態・データベース・外部ファイルI/O・純粋ロジックの5層構造になっています。「よく買うもの」管理はダイアログ（`widgets/favorites_dialog.dart`）から全画面（`screens/favorites_screen.dart`）へ置き換わっており、`screens/` にはメイン画面と合わせて2ファイルが存在します。
 
 なお本ドキュメントでは、過去に存在した「商品名の入力履歴（`item_history` テーブル・`upsertHistory`・`history_select_dialog.dart`）」には一切触れません。この履歴ベースのオートコンプリート機能は2026-06-29に完全に削除され、現在のコードベースには存在しません。後述する `item_name_field.dart` の候補表示（サジェスト）機能は、履歴DBを参照する別物であり、現在リストに表示されている商品名や「よく買うもの」の登録名（`candidateNames`）を元にした別の仕組みです。
 
@@ -70,7 +74,7 @@ void main() async {
 class Item {
   final String name;      // 商品名
   final int price;        // 税込単価（0以上の整数）
-  final bool isChecked;   // 購入済みフラグ
+  final bool isChecked;   // チェック済みフラグ
   final int? id;          // DBのPRIMARY KEY（新規時はnull）
   final int createdAt;    // 作成時刻（ミリ秒）
   final int sortOrder;    // 表示順（小さいほど上）
@@ -139,10 +143,20 @@ class ShoppingList {
   final int? id;
   final String name;
   final int createdAt;
+  final int budget;
+
+  ShoppingList({
+    this.id,
+    required this.name,
+    int? createdAt,
+    this.budget = 0,
+  }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 }
 ```
 
-変更なし。`lists` テーブルの行を表す軽量なモデルです。`copyWith()` は持たず、リスト名変更・削除はDBへの直接操作で対応しています。
+`budget`（予算）フィールドが新規追加されました。デフォルトは `0` で、これは「予算未設定」を意味する特別値として扱われます（`0` と「未設定」を区別する専用フラグは持たず、`widgets/budget_summary.dart` 側で `budget == 0` を「未設定」と解釈する設計です）。
+
+`copyWith()` も新規に実装されており、他のモデル（`Item`）と同じ `??` 演算子による「引数がnullなら変更しない」パターンです。ただし実際の呼び出し元（`shopping_list_screen.dart` の予算更新フロー）では `copyWith` を使わず、`DatabaseHelper.updateListBudget` で直接DBを更新してから `loadLists()` で全リストを再取得する方式を取っており、`copyWith`自体はまだ積極的に活用されていません。リスト名変更・削除も同様にDBへの直接操作で対応しています。
 
 ---
 
@@ -161,12 +175,12 @@ Future<Database> get database async {
 }
 ```
 
-### テーブル構成（version 7）
+### テーブル構成（version 8）
 
 | テーブル名 | 役割 |
 |---|---|
 | `items` | 買い物商品。`listId` でリストに、`categoryId` でカテゴリに紐付け |
-| `lists` | 複数リストの管理 |
+| `lists` | 複数リストの管理。`budget INTEGER NOT NULL DEFAULT 0`（予算、新規） |
 | `favorites` | よく買うもの（独立したマスタデータ）。`categoryId` を持つ |
 | `categories` | カテゴリマスタ（`name` / `sortOrder`） |
 
@@ -193,9 +207,20 @@ if (oldVersion < 7) {
     try { await db.execute(sql); } catch (_) {}
   }
 }
+
+// version < 8: lists に budget カラムを追加
+if (oldVersion < 8) {
+  try {
+    await db.execute(
+      'ALTER TABLE lists ADD COLUMN budget INTEGER NOT NULL DEFAULT 0',
+    );
+  } catch (_) {
+    // カラムが既に存在する場合は無視
+  }
+}
 ```
 
-version 7 で追加された分岐が、カテゴリ機能のためのマイグレーションです。`CREATE TABLE IF NOT EXISTS` による冪等性、`ALTER TABLE ADD COLUMN` を `try/catch` で握りつぶす二重適用対策は、既存のマイグレーション方針をそのまま踏襲しています。カラム追加（`ADD COLUMN`）はAndroidのSQLiteでも問題なく動作するため、v4→v5のような「カラム削除」時にのみ必要だったテーブル再作成パターンはここでは不要です。
+version 8 で追加された分岐が、予算表示機能のためのマイグレーションです。`ALTER TABLE ADD COLUMN ... DEFAULT 0` により、既存の全リストは自動的に「予算未設定（0円）」として扱われます。`try/catch` で二重適用を握りつぶす方針、`CREATE TABLE IF NOT EXISTS` の冪等性は、version 7までのマイグレーション方針をそのまま踏襲しています。`resolveListName`・`duplicateList`・カテゴリCRUD（`insertCategory`／`deleteCategory`）のロジック自体には変更がありません。
 
 ### `insertItem` と `insertItemWithId` の使い分け（変更なし）
 
@@ -245,6 +270,23 @@ static String resolveListName(String name, Set<String> existingNames) {
 
 バックアップ／共有ファイルをインポートする際、同名のリストがすでに存在する場合に `名前(2)`, `名前(3)`... と末尾に連番を付けて一意な名前を生成します。`static` メソッドなのでDBアクセスを伴わない純粋関数として単体テストしやすい設計です。
 
+### `updateListBudget` — リスト予算の更新（新規）
+
+```dart
+Future<void> updateListBudget(int listId, int budget) async {
+  final db = await database;
+
+  await db.update(
+    'lists',
+    {'budget': budget},
+    where: 'id = ?',
+    whereArgs: [listId],
+  );
+}
+```
+
+`updateListName` と対になる、`lists.budget` カラムだけを更新するシンプルなメソッドです。呼び出し元の `shopping_list_screen.dart` の `_showBudgetInputDialog` では、この呼び出し直後に `loadLists()` で全リストを再取得して画面を再描画します。
+
 ### カテゴリCRUD
 
 ```dart
@@ -284,6 +326,18 @@ Future<ImportResult> importData(Map<String, dynamic> data) async {
 **リスト10件上限のチェックがUIとDB書き込み経路の両方に存在する。** `_showAddListDialog` のUI側チェックだけでなく `importData` 冒頭でも `existingNames.length + incomingLists.length > 10` を検証しています。これはプロジェクトルールに明記された「インポート・DB書き込み経路にはUIと同等の業務ルールチェックを必ず実装する」を反映したもので、UIバリデーションだけでは迂回できる経路（他アプリからファイルを共有してインポートする経路など）を塞いでいます。
 
 **IDのリマップ。** インポート元のJSONに含まれる `id`（`categories`・`lists`）はインポート先DBでは意味を持たないため、`categoryIdMap` / `listIdMap` で「旧ID→新ID」の対応表を作りながら挿入し、`items` / `favorites` の外部キー参照（`categoryId` / `listId`）を新IDに差し替えます。
+
+**`budget` を安全にデフォルト0として扱う。**
+
+```dart
+final newId = await txn.insert('lists', {
+  'name': resolvedName,
+  'createdAt': baseCreatedAt + listInsertIndex,
+  'budget': (list['budget'] as num?)?.toInt() ?? 0,
+});
+```
+
+`budget` フィールドが存在しない古いバックアップ（version 8未満のDBから書き出されたJSON、または `budget` 導入前のバックアップファイル）をインポートしても `list['budget']` は `null` になるため、`(num?)?.toInt() ?? 0` で安全に `0`（予算未設定）にフォールバックします。`(num).toInt()` を使っているのは、`models/category.dart` の節で述べた「外部JSON由来の整数値は `as int` でなく `(num).toInt()` でキャストする」というプロジェクトルールに沿ったものです。
 
 **`createdAt` を流用せずDB側で採番し直す。**
 
@@ -350,7 +404,7 @@ class CategoryNotifier extends AsyncNotifier<List<Category>> {
 }
 ```
 
-`item_provider.dart` と同じ「DB書き込み→再取得→state更新」パターンです。`addCategory` が戻り値として新規カテゴリの `id` を返す点が特徴で、これは `add_item_dialog.dart` や `favorites_dialog.dart` のカテゴリドロップダウンから「新規カテゴリ」ボタンで即座にそのカテゴリを選択状態にするために使われています（`setState(() => _selectedCategoryId = id)`）。
+`item_provider.dart` と同じ「DB書き込み→再取得→state更新」パターンです。`addCategory` が戻り値として新規カテゴリの `id` を返す点が特徴で、これは `add_item_dialog.dart` や `screens/favorites_screen.dart` のカテゴリドロップダウンから「新規カテゴリ」ボタンで即座にそのカテゴリを選択状態にするために使われています（`setState(() => _selectedCategoryId = id)`）。
 
 `categoryProvider` は `shopping_list_screen.dart` のカテゴリ管理メニュー操作後や、バックアップインポート成功後（`ref.invalidate(categoryProvider)`）にも再取得がトリガーされます。
 
@@ -358,13 +412,79 @@ class CategoryNotifier extends AsyncNotifier<List<Category>> {
 
 ## 8. `providers/purchase_provider.dart` — 課金状態管理
 
-ロジックは前バージョンから変更ありません。`build()` の3ステップ初期化（①SharedPreferencesキャッシュの即時読込 → ②購入ストリーム購読 → ③未購入時のみPlay Storeに照合）、`ref.onDispose(sub.cancel)` によるストリーム自動解放は同じです。
+`build()` の3ステップ初期化（①SharedPreferencesキャッシュの即時読込 → ②購入ストリーム購読 → ③Play Storeへの照合）、`ref.onDispose(sub.cancel)` によるストリーム自動解放という骨格は変更ありませんが、③の判定ロジックが `resolveAdFreeState`（後述の `utils/purchase_resolution.dart`）へ純粋関数として切り出され、`queryPastPurchases()` にタイムアウトガードが追加されました。
 
-変更点は依存パッケージのバージョンです。`pubspec.yaml` で `in_app_purchase: ^3.3.0` を使用しており、これは Google Play Billing Library 8.0.0 に対応したバージョンです。プロジェクトルールには「外部パッケージの依存バージョン対応関係を調査する際は、WebFetchの要約結果をそのまま採用せず、GitHubのraw CHANGELOG.md等の一次情報で裏取りする」と明記されており、この対応バージョン確認時に pub.dev の要約が誤情報（Billing Library 3.0への移行、という誤った内容）を含んでいたため、GitHub raw CHANGELOGで裏取りして正しいバージョンを採用した経緯があります。コード自体（`purchase_provider.dart`）に変更はなく、パッケージ更新のみで対応が完了しています。
+### 非対称遅延設計（変更なし）
+
+```dart
+if (cached) {
+  unawaited(_refreshFromPlayStore(cached));
+  return cached;
+}
+
+final resolution = await _queryAdFreeResolution(cached);
+if (resolution.shouldPersist) {
+  await prefs.setBool(_kPrefKey, resolution.resolved);
+}
+return resolution.resolved;
+```
+
+「広告なし」状態の遅延（`cached == true`）はバックグラウンドで照会し起動をブロックしない一方、「広告あり」状態（`cached == false`）は照会完了を待ってから返す、という非対称設計は健在です。以前は判定結果を `bool` で直接扱っていましたが、現在は `_queryAdFreeResolution` が返す `AdFreeResolution`（`resolved` / `shouldPersist`）を経由します。
+
+### `queryPastPurchases()` のタイムアウトガードと未確定購入の確定処理
+
+```dart
+const _kQueryPastPurchasesTimeout = Duration(seconds: 10);
+...
+final response = await addition
+    .queryPastPurchases()
+    .timeout(_kQueryPastPurchasesTimeout);
+...
+for (final p in purchased) {
+  if (p.productID == kRemoveAdsProductId && p.pendingCompletePurchase) {
+    await InAppPurchase.instance.completePurchase(p);
+  }
+}
+```
+
+`queryPastPurchases()` に約10秒のタイムアウトを設け、Play Store側の応答が返ってこない場合でも `build()` がいつまでもブロックされないようにしています。タイムアウトも含む例外は `catch (_)` で捕捉し、`hasError: true` として `resolveAdFreeState` に渡されるため、通信エラー時と同様にキャッシュ値を維持したまま安全側に倒れます。また、照会で見つかった購入のうち `pendingCompletePurchase`（未確定）のものは `completePurchase()` で確定させます。これは、購入が未確定のまま放置されるとGoogle Playにより自動返金されてしまうためです。
+
+### 依存パッケージのバージョン（変更なし）
+
+`pubspec.yaml` で `in_app_purchase: ^3.3.0` を使用しており、これは Google Play Billing Library 8.0.0 に対応したバージョンです。プロジェクトルールには「外部パッケージの依存バージョン対応関係を調査する際は、WebFetchの要約結果をそのまま採用せず、GitHubのraw CHANGELOG.md等の一次情報で裏取りする」と明記されており、この対応バージョン確認時に pub.dev の要約が誤情報（Billing Library 3.0への移行、という誤った内容）を含んでいたため、GitHub raw CHANGELOGで裏取りして正しいバージョンを採用した経緯があります。
 
 ---
 
-## 9. `services/backup_service.dart` — バックアップ・共有（新規）
+## 9. `utils/purchase_resolution.dart` — 広告なし状態判定の純粋関数（新規）
+
+```dart
+AdFreeResolution resolveAdFreeState({
+  required bool cached,
+  required List<String> purchasedProductIds,
+  required bool hasError,
+  required String targetProductId,
+}) {
+  if (hasError) {
+    return AdFreeResolution(resolved: cached, shouldPersist: false);
+  }
+  final hasTargetPurchase = purchasedProductIds.contains(targetProductId);
+  return AdFreeResolution(resolved: hasTargetPurchase, shouldPersist: true);
+}
+```
+
+`resolveAdFreeState` はもともと `purchase_provider.dart` 内にロジックとして存在していましたが、`utils/purchase_resolution.dart` へ純粋関数として切り出されました。切り出しの狙いはテスト容易性です。`PurchaseNotifier` は `InAppPurchase.instance` や `SharedPreferences` といった外部依存を持つため単体テストが書きにくい一方、`resolveAdFreeState` は「キャッシュ値・購入済みプロダクトID一覧・エラー有無・対象プロダクトID」という単純な値だけを受け取り `AdFreeResolution` を返す純粋関数のため、外部依存をモックせずにロジックだけを検証できます。
+
+判定ロジックは3パターンです。
+
+- `hasError` が `true`（通信エラー・タイムアウト・例外時）→ `cached` をそのまま採用し、`shouldPersist: false`（永続化しない）。正規購入者の広告非表示状態を誤って解除しないよう、安全側に倒します。
+- `hasError` が `false` かつ購入済みプロダクトIDに `targetProductId`（`remove_ads`）が含まれる → `resolved: true` を採用し永続化する。
+- `hasError` が `false` かつ含まれない → `resolved: false` を採用し永続化する（返金・取り消しにより広告が復活するケース）。
+
+戻り値の `AdFreeResolution` は `resolved`（採用すべき値）と `shouldPersist`（呼び出し側がSharedPreferencesへ保存すべきか）の2フィールドを持つ小さな値オブジェクトで、`==` と `hashCode` を実装しているためテストでの値比較がしやすい設計です。
+
+---
+
+## 10. `services/backup_service.dart` — バックアップ・共有（新規）
 
 `DatabaseHelper` を利用してJSONの構築・ファイルI/O・共有シート起動を行う、UIから独立したサービスクラスです。すべて `static` メソッドで構成されており、状態を持ちません。
 
@@ -411,7 +531,7 @@ static Future<void> export() async {
 
 一方 `saveToDevice()` は `file_picker` の `saveFile`（AndroidではSAF: Storage Access Framework）を使い、ユーザーが選んだ保存先に直接バイト列を書き込みます。一時ファイルを経由しないため `finally` での削除処理は不要です。
 
-### `shareList` — 未購入商品のみを共有用ファイル化
+### `shareList` — 未チェック商品のみを共有用ファイル化
 
 ```dart
 static Future<bool> shareList(int listId, String listName) async {
@@ -426,7 +546,7 @@ static Future<bool> shareList(int listId, String listName) async {
 }
 ```
 
-「1つのリストだけを他の人に送る」機能です。バックアップ全体ではなく、共有できる商品（未購入のもの）が実際に使っている `categoryId` に対応するカテゴリのみを抽出しています（`whereType<int>()` で `categoryId == null` の商品を除外してから `Set` 化）。これにより、共有ファイルに無関係なカテゴリ定義が混入しないよう絞り込んでいます。
+「1つのリストだけを他の人に送る」機能です。バックアップ全体ではなく、共有できる商品（未チェックのもの）が実際に使っている `categoryId` に対応するカテゴリのみを抽出しています（`whereType<int>()` で `categoryId == null` の商品を除外してから `Set` 化）。これにより、共有ファイルに無関係なカテゴリ定義が混入しないよう絞り込んでいます。
 
 ### `parseAndValidate` — インポート前のフォーマット検証
 
@@ -451,9 +571,36 @@ static Map<String, dynamic> parseAndValidate(String content) {
 
 ---
 
-## 10. `screens/shopping_list_screen.dart` — メイン画面
+## 11. `screens/shopping_list_screen.dart` — メイン画面
 
-アプリの中核画面です。カテゴリ・バックアップ機能の追加により、以前よりも扱う責務が大きく増えています。
+アプリの中核画面です。カテゴリ・バックアップ・予算表示機能の追加により、以前よりも扱う責務が大きく増えています。
+
+### 予算表示（`BudgetSummary`）と合計表示（`TotalSummary`）の2段表示
+
+```dart
+Column(
+  children: [
+    // 予算表示（TotalSummary直上）
+    Padding(
+      ...
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: BudgetSummary(budget: ..., onTap: () => _showBudgetInputDialog(...)),
+      ),
+    ),
+    // 合計表示（タブ直下）
+    Padding(
+      ...
+      child: TotalSummary(items: items),
+    ),
+    const Divider(height: 1),
+    // リスト本体
+    Expanded(child: ...),
+  ],
+)
+```
+
+`BudgetSummary` が `TotalSummary` の直上に配置され、タブ直下は「予算」「未チェック／チェック済合計」の2段表示になりました。`BudgetSummary` に渡す `budget` は `shoppingLists.firstWhere((e) => e.id == currentListId, ...)` で現在表示中のリストの `ShoppingList` を探して取り出しており、`ItemNotifier` が保持する `items` とは別に、画面側のローカルな `shoppingLists`（`List<ShoppingList>`）から都度取得する設計です。
 
 ### `_buildCategorySections` — カテゴリ別セクション生成
 
@@ -464,7 +611,7 @@ List<Widget> _buildCategorySections({
   ...
 }) {
   if (categories.isEmpty) {
-    return [ListSection(title: '未購入', items: unchecked, ...)];
+    return [ListSection(title: '未チェック', items: unchecked, ...)];
   }
 
   final result = <Widget>[];
@@ -485,7 +632,7 @@ List<Widget> _buildCategorySections({
 }
 ```
 
-未購入商品を「未購入」1セクションでまとめて表示する従来の挙動から、カテゴリが1件でも存在する場合はカテゴリごとにセクションを分割して表示する挙動に変わりました。設計上の要点は2つです。
+未チェック商品を「未チェック」1セクションでまとめて表示する従来の挙動から、カテゴリが1件でも存在する場合はカテゴリごとにセクションを分割して表示する挙動に変わりました。設計上の要点は2つです。
 
 **カテゴリが0件のときは従来通りの表示にフォールバックする。** カテゴリ機能を使わないユーザーには一切UIの変化がありません。
 
@@ -501,7 +648,7 @@ onReorder: (oldIndex, newIndex) async {
 },
 ```
 
-`ItemNotifier.reorderUncheckedItems` は「未購入リスト全体」でのインデックスを前提に実装されています。しかしカテゴリ別セクションの `ReorderableListView` はセクション内（`catItems`）のローカルなインデックスしか返しません。そこで `unchecked.indexOf(...)` を使い、カテゴリ内のローカルインデックスを未購入全体でのグローバルインデックスに変換してから呼び出しています。`Item` はイミュータブルなオブジェクトで `==` を再定義していないため、`indexOf` は参照（identity）比較で目的の要素を一意に特定できます。
+`ItemNotifier.reorderUncheckedItems` は「未チェックリスト全体」でのインデックスを前提に実装されています。しかしカテゴリ別セクションの `ReorderableListView` はセクション内（`catItems`）のローカルなインデックスしか返しません。そこで `unchecked.indexOf(...)` を使い、カテゴリ内のローカルインデックスを未チェック全体でのグローバルインデックスに変換してから呼び出しています。`Item` はイミュータブルなオブジェクトで `==` を再定義していないため、`indexOf` は参照（identity）比較で目的の要素を一意に特定できます。
 
 ### `_exportBackup` / `_importBackup` — バックアップUIフロー
 
@@ -550,7 +697,7 @@ if (existingNames.contains(baseName)) {
 
 ---
 
-## 11. `widgets/add_item_dialog.dart` — 商品追加・編集ダイアログ
+## 12. `widgets/add_item_dialog.dart` — 商品追加・編集ダイアログ
 
 構造が大きく拡張されています。従来の「追加」「編集」の単純な分岐に加え、**連続追加**・**未保存確認**・**カテゴリ選択**・**よく買うものへの同時登録**が追加されました。
 
@@ -622,7 +769,7 @@ IconButton(
 ),
 ```
 
-`DropdownButtonFormField` は `initialValue` プロパティを使用しています。これはこのプロジェクトが対象とするFlutterバージョン（3.33.0以降）で `value` が非推奨化され `initialValue` が正しいプロパティになったためで、プロジェクトルールにも明記された注意点です。カテゴリドロップダウンの隣に「＋」ボタンを配置し、ダイアログを閉じずにその場で新規カテゴリを作成→即選択できるようにしています（`categoryProvider.notifier.addCategory` が返すIDをそのまま `_selectedCategoryId` にセット）。この「新規カテゴリをインラインで追加する」UIパターンは `favorites_dialog.dart` の追加・編集ダイアログにも同一の実装が存在します（後述）。
+`DropdownButtonFormField` は `initialValue` プロパティを使用しています。これはこのプロジェクトが対象とするFlutterバージョン（3.33.0以降）で `value` が非推奨化され `initialValue` が正しいプロパティになったためで、プロジェクトルールにも明記された注意点です。カテゴリドロップダウンの隣に「＋」ボタンを配置し、ダイアログを閉じずにその場で新規カテゴリを作成→即選択できるようにしています（`categoryProvider.notifier.addCategory` が返すIDをそのまま `_selectedCategoryId` にセット）。この「新規カテゴリをインラインで追加する」UIパターンは `screens/favorites_screen.dart` の `_AddFavoriteDialog` / `_EditFavoriteDialog` にも同一の実装が存在します（後述）。
 
 ### 「よく買うものに登録」チェックボックスと重複確認
 
@@ -643,54 +790,92 @@ if (_addToFavorites) {
 }
 ```
 
-商品追加と同時に「よく買うもの」へも登録できます。既に同名の「よく買うもの」が存在する場合は確認ダイアログを挟み、無条件の重複登録を避けています。この「重複確認ダイアログ」パターンは `shopping_list_screen.dart` の `_buildCategorySections`（`onAddToFavoritesFor`）にも、購入済みセクションの `onAddToFavorites` コールバックにも、ほぼ同一のコードとして存在します。プロジェクトルールに「`await` を含む非同期処理を修正・追加する際は、同一パターンが複数ファイルに存在しないか確認し、全箇所を同時に修正する」と明記されているのは、まさにこの重複実装を指しています。将来この確認フローの仕様を変更する場合は、最低でもこの3箇所（`add_item_dialog.dart` と `shopping_list_screen.dart` 内の2箇所）を同時に修正する必要があります。
+商品追加と同時に「よく買うもの」へも登録できます。既に同名の「よく買うもの」が存在する場合は確認ダイアログを挟み、無条件の重複登録を避けています。この「重複確認ダイアログ」パターンは `shopping_list_screen.dart` の `_buildCategorySections`（`onAddToFavoritesFor`）にも、チェック済セクションの `onAddToFavorites` コールバックにも、ほぼ同一のコードとして存在します。プロジェクトルールに「`await` を含む非同期処理を修正・追加する際は、同一パターンが複数ファイルに存在しないか確認し、全箇所を同時に修正する」と明記されているのは、まさにこの重複実装を指しています。将来この確認フローの仕様を変更する場合は、最低でもこの3箇所（`add_item_dialog.dart` と `shopping_list_screen.dart` 内の2箇所）を同時に修正する必要があります。
 
 ---
 
-## 12. `widgets/favorites_dialog.dart` — よく買うもの管理
+## 13. `screens/favorites_screen.dart` — よく買うもの管理（ダイアログから全画面へ）
 
-大幅に拡張されています。検索・並べ替え・カテゴリ対応・全選択/全解除・登録済み確認が追加されました。
+`widgets/favorites_dialog.dart` は削除され、代わりに `ConsumerStatefulWidget` の専用画面 `FavoritesScreen` が追加されました。呼び出し元（`shopping_list_screen.dart`）はダイアログの `showDialog` ではなく、通常の画面遷移として開きます。
 
-### 検索とフィルタリング
+```dart
+final count = await Navigator.push<int>(
+  context,
+  MaterialPageRoute(
+    builder: (_) => FavoritesScreen(currentListId: currentListId),
+  ),
+);
+```
+
+`Navigator.push` の戻り値として「リストに追加した件数」（`int?`）を受け取り、`FavoritesScreen` 側は `Navigator.pop(context, ids.length)` で件数を返します。呼び出し元はこの件数が1件以上ならSnackBarで「○件追加しました」と表示します。ダイアログ（`AlertDialog`）だった頃と比べて表示領域の制約が緩和され、検索・全選択操作ボタン・カテゴリ別セクション一覧・下部の操作ボタンを窮屈にならずに配置できるようになりました。
+
+### 検索・全選択/全解除・インラインUndo（ロジックは踏襲）
 
 ```dart
 List<Map<String, dynamic>> get _filteredFavorites =>
     _searchText.isEmpty
         ? _favorites
-        : _favorites.where((f) => (f['name'] as String)
-            .toLowerCase()
-            .contains(_searchText.toLowerCase())).toList();
-```
+        : _favorites
+            .where((f) => (f['name'] as String)
+                .toLowerCase()
+                .contains(_searchText.toLowerCase()))
+            .toList();
 
-検索文字列が空のときは全件、それ以外は部分一致（大文字小文字を無視）でフィルタします。検索中は並べ替え可能な `ReorderableListView.builder` ではなく、通常の `ListView.builder`（`_searchText.isEmpty` の分岐先）が使われる点が重要な設計判断です。フィルタされた部分集合に対して並べ替えを行うと、`sortOrder` の意味が「全件中の順位」なのか「フィルタ結果内の順位」なのか曖昧になるため、検索中は並べ替えUIそのものを提供しないことで曖昧さを回避しています。
-
-### 全選択/全解除
-
-```dart
 bool get _allSelected =>
     _filteredFavorites.isNotEmpty &&
     _filteredFavorites.every((f) => _selectedIds.contains(f['id'] as int));
-
-void _toggleSelectAll() {
-  setState(() {
-    if (_allSelected) {
-      for (final f in _filteredFavorites) { _selectedIds.remove(f['id'] as int); }
-    } else {
-      for (final f in _filteredFavorites) { _selectedIds.add(f['id'] as int); }
-    }
-  });
-}
 ```
 
-`_allSelected` は「現在表示されている（検索フィルタ後の）項目がすべて選択済みか」を判定します。全選択/全解除ボタンは検索結果に対してのみ作用し、検索で絞り込まれていない他の項目の選択状態には影響しません。
+検索文字列が空のときは全件、それ以外は部分一致（大文字小文字を無視）でフィルタする仕様、`_allSelected` が「検索フィルタ後の表示項目がすべて選択済みか」を判定する仕様は、ダイアログ時代から変わっていません。検索中（`_searchText.isNotEmpty`）はカテゴリ分けせず `ListView.builder` によるフラットな絞り込み表示のみとなり、並べ替えUIは提供されません（フィルタ結果に対して `sortOrder` を並べ替えると、その意味が「全件中の順位」か「フィルタ結果内の順位」か曖昧になるため）。削除時のUndoも、`AlertDialog` のモーダルバリアがSnackBarを吸収する問題を避けるために採用された「`Timer(const Duration(seconds: 5), ...)` で自動消去するインラインバナー」方式のまま、画面本体に引き継がれています。
 
-### インラインUndoバナー（変更なし）
+### カテゴリ別セクション表示（`favorites_section_helper.dart` を利用）
 
-`AlertDialog` のモーダルバリアがSnackBarへのタップを吸収してしまうため、ダイアログ内でのUndoは `Timer(const Duration(seconds: 5), ...)` で自動消去するインラインバナーとして実装されています。これは前バージョンと同じ設計です。
+```dart
+final categories = ref.watch(categoryProvider).value ?? <Category>[];
+final sections =
+    buildFavoriteSections(favorites: _favorites, categories: categories);
 
-### `_AddFavoriteDialog` / `_EditFavoriteDialog` — カテゴリ選択の重複実装
+final sectionWidgets = sections == null
+    ? [_buildSection(null, _favorites)]
+    : [for (final s in sections) _buildSection(s.title, s.items)];
+```
 
-「よく買うもの」の新規登録・編集ダイアログにも、`add_item_dialog.dart` と同じ「カテゴリドロップダウン＋新規カテゴリのインライン追加」UIが実装されています。
+`shopping_list_screen.dart` の `_buildCategorySections` と同じ「カテゴリが1件もなければフラット表示にフォールバックする」設計パターンが、後述する `utils/favorites_section_helper.dart` の `buildFavoriteSections` として切り出され、favorites画面にも導入されました。各セクションはカテゴリ内で独立して `ReorderableListView.builder` による並べ替えが可能で、セクション内ローカルindexをグローバルindexへ変換する処理（`_onReorderInSection` → `resolveGlobalFavoriteIndex`）も、`shopping_list_screen.dart` のカテゴリ内reorderと同じパターンです。
+
+### 下部の操作ボタン（`bottomNavigationBar`）
+
+```dart
+bottomNavigationBar: SafeArea(
+  child: Row(
+    children: [
+      Expanded(
+        child: OutlinedButton(
+          onPressed: () async {
+            await showDialog<void>(
+              context: context,
+              builder: (_) => _AddFavoriteDialog(onAdded: _load),
+            );
+          },
+          child: const Text('直接登録'),
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: FilledButton(
+          onPressed: _selectedIds.isEmpty ? null : _addToList,
+          child: const Text('リストに追加'),
+        ),
+      ),
+    ],
+  ),
+),
+```
+
+ダイアログ時代はAppBarやコンテンツ内にボタンが混在していましたが、全画面化に伴い「直接登録」（新規のよく買うものをその場で追加するダイアログを開く）と「リストに追加」（チェック済みの項目を現在のリストへ一括追加して画面を閉じる）の2つが、画面下部に固定表示される構成になりました。「リストに追加」は `_selectedIds` が空の間は無効化されます。
+
+### `_AddFavoriteDialog` / `_EditFavoriteDialog` — カテゴリ選択の重複実装（引き続き存在）
+
+「よく買うもの」の新規登録・編集ダイアログには、`add_item_dialog.dart` と同じ「カテゴリドロップダウン＋新規カテゴリのインライン追加」UIが引き続き実装されています。
 
 ```dart
 Future<void> _showNewCategoryDialog(List<Category> categories) async {
@@ -704,11 +889,59 @@ Future<void> _showNewCategoryDialog(List<Category> categories) async {
 
 このメソッドは `add_item_dialog.dart`・`_AddFavoriteDialog`・`_EditFavoriteDialog` の3箇所にほぼ同一のコードとして存在します。共通ウィジェット化されていない点は、今後リファクタリングの余地がある箇所として認識しておくべきです（ただしプロジェクトルールの「共通コンポーネントを既存の使用例を確認せずに使わない」という方針もあるため、共通化するには既存3箇所の使用パターンを慎重に確認する必要があります）。
 
-`_AddFavoriteDialog` では商品名入力に `ItemNameField` を使用し、`candidateNames` として**既存の「よく買うもの」の名前一覧**を渡しています（後述の「候補表示機能」を参照）。これはリスト画面の商品追加で使われる `candidateNames`（現在のリスト内の商品名）とは異なるデータソースです。
+`_AddFavoriteDialog` では商品名入力に `ItemNameField` を使用し、`candidateNames` として**既存の「よく買うもの」の名前一覧**を渡しています（後述の「候補表示機能」を参照）。これはリスト画面の商品追加で使われる `candidateNames`（現在のリスト内の商品名）とは異なるデータソースです。個数入力欄には `int.tryParse` による `validator`（`1以上の整数を入力してください`）が `_AddFavoriteDialog`・`_EditFavoriteDialog` の両方に実装済みで、`quantity_field.dart` の `QuantityField` に追加されたのと同じ検証ルールが、こちらでは独自の `TextFormField` として個別に実装されています。
 
 ---
 
-## 13. `widgets/category_management_dialog.dart` — カテゴリ管理ダイアログ（新規）
+## 14. `utils/favorites_section_helper.dart` — favoritesのカテゴリ別セクション化（新規）
+
+```dart
+List<FavoriteSection>? buildFavoriteSections({
+  required List<Map<String, dynamic>> favorites,
+  required List<Category> categories,
+}) {
+  if (categories.isEmpty) return null;
+
+  final sections = <FavoriteSection>[];
+  for (final cat in categories) {
+    final items =
+        favorites.where((f) => (f['categoryId'] as int?) == cat.id).toList();
+    if (items.isEmpty) continue;
+    sections.add(FavoriteSection(title: cat.name, items: items));
+  }
+
+  final categoryIds = categories.map((c) => c.id).toSet();
+  final noCategory = favorites
+      .where((f) =>
+          f['categoryId'] == null ||
+          !categoryIds.contains(f['categoryId'] as int?))
+      .toList();
+  if (noCategory.isNotEmpty) {
+    sections.add(FavoriteSection(title: 'カテゴリなし', items: noCategory));
+  }
+
+  return sections;
+}
+```
+
+`shopping_list_screen.dart` の `_buildCategorySections` と同じ設計パターン（カテゴリ0件ならnullを返しフラット表示にフォールバック、`categoryId` がnullまたは存在しないカテゴリIDを指すfavoriteは「カテゴリなし」セクションにまとめる）を、favorites側でも再利用できる純粋関数として切り出したものです。`DatabaseHelper` や `Riverpod` に依存せず、`List<Map<String, dynamic>>` と `List<Category>` だけを受け取って `List<FavoriteSection>?` を返すため、`favorites_screen.dart` からもテストコードからも同じロジックを呼び出せます。
+
+```dart
+int resolveGlobalFavoriteIndex({
+  required List<Map<String, dynamic>> allFavorites,
+  required List<Map<String, dynamic>> sectionItems,
+  required int indexInSection,
+}) {
+  final targetId = sectionItems[indexInSection]['id'] as int;
+  return allFavorites.indexWhere((f) => f['id'] as int == targetId);
+}
+```
+
+`resolveGlobalFavoriteIndex` は、カテゴリセクション内の並べ替えで得られるローカルなindex（`indexInSection`）を、`sortOrder` 順に並んだ全favoritesリスト（`allFavorites`）上でのグローバルなindexへ変換する純粋関数です。`shopping_list_screen.dart` が `unchecked.indexOf(catItems[oldIndex])` のように `Item` の参照（identity）比較で変換していたのに対し、こちらは `Map<String, dynamic>` を扱うため参照比較ができず、`id` フィールドの値で `indexWhere` を行う点が異なります。見つからない場合は `-1` を返し、呼び出し元の `favorites_screen.dart` の `_onReorderInSection` はその場合に処理を中断します（`if (globalOld == -1 || globalNew == -1) return;`）。
+
+---
+
+## 15. `widgets/category_management_dialog.dart` — カテゴリ管理ダイアログ（新規）
 
 ```dart
 Future<void> showCategoryManagementDialog(BuildContext context) async {
@@ -752,7 +985,7 @@ class _CategoryManagementDialog extends ConsumerWidget {
 
 ---
 
-## 14. `widgets/item_tile.dart` — 商品リスト行
+## 16. `widgets/item_tile.dart` — 商品リスト行
 
 `Dismissible` によるスワイプ削除の実装（`key` に `isChecked` を含める設計）は変更ありませんが、長押し時の挙動が変わりました。
 
@@ -768,7 +1001,7 @@ onLongPress: (onMoveToTab == null && onAddToFavorites == null)
             mainAxisSize: MainAxisSize.min,
             children: [
               if (onMoveToTab != null)
-                ListTile(title: const Text('別タブに移動'), onTap: () => Navigator.pop(context, 'move')),
+                ListTile(title: const Text('別のリストに移動'), onTap: () => Navigator.pop(context, 'move')),
               if (onAddToFavorites != null)
                 ListTile(title: const Text('よく買うものに登録'), onTap: () => Navigator.pop(context, 'favorite')),
               ListTile(title: const Text('キャンセル'), onTap: () => Navigator.pop(context)),
@@ -780,11 +1013,11 @@ onLongPress: (onMoveToTab == null && onAddToFavorites == null)
       },
 ```
 
-以前は長押し＝別リストへの移動、という単一の操作でしたが、「よく買うものへの登録」がここに統合されたため、長押しで `showModalBottomSheet` を開いて操作を選択させる方式に変わりました。`onMoveToTab` / `onAddToFavorites` はどちらも `null` を許容する `VoidCallback?` で、コールバックが渡されなかった項目（例えば購入済みセクションでは移動元・移動先の概念が薄いため）はボトムシートの選択肢から自動的に除外されます。両方 `null` の場合は `onLongPress` 自体が `null` になり、長押しジェスチャーが無効化されます。
+以前は長押し＝別リストへの移動、という単一の操作でしたが、「よく買うものへの登録」がここに統合されたため、長押しで `showModalBottomSheet` を開いて操作を選択させる方式に変わりました。`onMoveToTab` / `onAddToFavorites` はどちらも `null` を許容する `VoidCallback?` で、コールバックが渡されなかった項目（例えばチェック済セクションでは移動元・移動先の概念が薄いため）はボトムシートの選択肢から自動的に除外されます。両方 `null` の場合は `onLongPress` 自体が `null` になり、長押しジェスチャーが無効化されます。
 
 ---
 
-## 15. `widgets/list_section.dart` — セクション
+## 17. `widgets/list_section.dart` — セクション
 
 ```dart
 ReorderableListView(
@@ -795,11 +1028,11 @@ ReorderableListView(
 )
 ```
 
-コアロジックは変更ありませんが、`onMoveToTab` / `onAddToFavorites` の2つのコールバックを `ItemTile` に橋渡しするパラメータが追加されています。`ListSection` はカテゴリ別セクションと未分類セクション、購入済みセクションのいずれの表示にも使い回される汎用コンポーネントとして、`title` にカテゴリ名や「未購入」「カテゴリなし」「購入済」を渡すことで表示を切り替えます。
+コアロジックは変更ありませんが、`onMoveToTab` / `onAddToFavorites` の2つのコールバックを `ItemTile` に橋渡しするパラメータが追加されています。`ListSection` はカテゴリ別セクションと未分類セクション、チェック済セクションのいずれの表示にも使い回される汎用コンポーネントとして、`title` にカテゴリ名や「未チェック」「カテゴリなし」「チェック済」を渡すことで表示を切り替えます。
 
 ---
 
-## 16. `widgets/list_tab_bar.dart` — タブバー（変更なし）
+## 18. `widgets/list_tab_bar.dart` — タブバー（変更なし）
 
 ```dart
 Tab(
@@ -815,7 +1048,7 @@ Tab(
 
 ---
 
-## 17. `widgets/list_management_buttons.dart` — リスト追加・複製ボタン（新規）
+## 19. `widgets/list_management_buttons.dart` — リスト追加・複製ボタン（新規）
 
 ```dart
 class ListManagementButtons extends StatelessWidget {
@@ -838,7 +1071,55 @@ AppBarの `actions` に並ぶボタン群のうち「追加」「複製」の2�
 
 ---
 
-## 18. `widgets/fields/item_name_field.dart` — 商品名入力と候補表示
+## 20. `widgets/budget_summary.dart` — リストごとの予算表示（新規）
+
+```dart
+class BudgetSummary extends StatelessWidget {
+  final int budget;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,###');
+    final text = budget == 0 ? '予算 -' : '予算 ¥${fmt.format(budget)}';
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        ...
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(width: 4),
+            const Icon(Icons.edit, size: 14, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+`ShoppingList.budget` の値をそのまま表示するだけの薄い `StatelessWidget` です。`budget == 0` を「予算未設定」とみなし「予算 -」と表示し、それ以外は「予算 ¥xxx」（`NumberFormat('#,###')` でカンマ区切り）と表示します。表示の右側に小さな鉛筆アイコン（`Icons.edit`）を添えて、タップ可能であることを示しています。
+
+`BudgetSummary` 自身は `onTap: VoidCallback` を受け取るだけで、タップ時に何を開くかは一切知りません。実際に予算入力ダイアログを開くロジック（`_showBudgetInputDialog`）と、その中身である `_BudgetInputDialog`（空欄保存時は `0` にフォールバックして「未設定」に戻す、`FilteringTextInputFormatter.digitsOnly` で数字のみ入力可）は、いずれも `budget_summary.dart` ではなく呼び出し元の `screens/shopping_list_screen.dart` 側に定義されています。
+
+```dart
+// shopping_list_screen.dart
+BudgetSummary(
+  budget: shoppingLists.firstWhere((e) => e.id == currentListId, ...).budget,
+  onTap: () => _showBudgetInputDialog(
+    shoppingLists.firstWhere((e) => e.id == currentListId, ...),
+  ),
+),
+```
+
+保存後は `DatabaseHelper.updateListBudget` を呼んでから `loadLists()` で全リストを再取得し、`setState` で再描画します（`ItemNotifier` を経由しない、`ShoppingList` 側のローカルな状態更新です）。
+
+---
+
+## 21. `widgets/fields/item_name_field.dart` — 商品名入力と候補表示
 
 **重要な注意：** このWidgetは過去に存在した「入力履歴（`item_history` テーブル）ベースのオートコンプリート」とは別物です。履歴ベースの機能は2026-06-29に完全に削除されており、現在の `ItemNameField` は呼び出し元から渡された `candidateNames`（現在のリスト内の商品名、または「よく買うもの」の登録名）を候補として表示するだけの、DBに依存しないシンプルな実装です。
 
@@ -864,13 +1145,13 @@ void _updateSuggestions(String text) {
 | 呼び出し元 | `candidateNames` の中身 |
 |---|---|
 | `shopping_list_screen.dart` → `showAddItemDialog` | 現在表示中のリストに含まれる商品名（`itemAsync` から `map((i) => i.name)`） |
-| `favorites_dialog.dart` の `_AddFavoriteDialog` | 既存の「よく買うもの」の登録名一覧 |
+| `screens/favorites_screen.dart` の `_AddFavoriteDialog` | 既存の「よく買うもの」の登録名一覧 |
 
 このように候補の母集団は「今使っている画面の文脈」に応じて切り替わりますが、`ItemNameField` 自体は候補の出所を意識しない汎用コンポーネントとして設計されています。
 
 ---
 
-## 19. `widgets/fields/price_field.dart` / `quantity_field.dart` / `memo_field.dart` — 入力フィールド群
+## 22. `widgets/fields/price_field.dart` / `quantity_field.dart` / `memo_field.dart` — 入力フィールド群
 
 いずれも `StatelessWidget` で `TextFormField` を薄くラップしただけの単純なコンポーネントです。
 
@@ -885,11 +1166,24 @@ TextFormField(
 )
 ```
 
-`inputFormatters: [FilteringTextInputFormatter.digitsOnly]` でソフトキーボードの入力段階から数字以外を弾いています。`onTap` でタップ時に全選択状態にする実装は、初期値（`0` や `1`）を毎回手動で消さずに上書き入力できるようにするための細かなUX配慮です。`PriceField` には0以上の整数であることを検証する `validator` がありますが、`QuantityField` には数値以外の文字を防ぐ `inputFormatters` はあるものの `validator` は実装されていません（数量の下限チェックは呼び出し元、たとえば `favorites_dialog.dart` の `_AddFavoriteDialog` のフォームで別途 `1以上の整数を入力してください` という検証が行われています）。`MemoField` は `maxLines: 3` の複数行テキストで、バリデーションを持ちません（空でも許可）。
+`inputFormatters: [FilteringTextInputFormatter.digitsOnly]` でソフトキーボードの入力段階から数字以外を弾いています。`onTap` でタップ時に全選択状態にする実装は、初期値（`0` や `1`）を毎回手動で消さずに上書き入力できるようにするための細かなUX配慮です。
+
+```dart
+// quantity_field.dart
+validator: (value) {
+  final quantity = int.tryParse(value ?? '');
+  if (quantity == null || quantity < 1) {
+    return '1以上の整数を入力してください';
+  }
+  return null;
+},
+```
+
+`PriceField` には0以上の整数であることを検証する `validator` があり、`QuantityField` にも2026-09-02のコミット（`e287a53`）で同様の `validator` が実装されました。数値がパースできない場合、または `1` 未満（`0` を含む）の場合に「1以上の整数を入力してください」というエラーを返します。これにより、商品追加・編集ダイアログ（`add_item_dialog.dart`）でも個数の下限（1以上）がフォームバリデーションのレベルで担保されるようになりました。`screens/favorites_screen.dart` の `_AddFavoriteDialog`／`_EditFavoriteDialog` は `QuantityField` を使わず独自の `TextFormField` を持ちますが、同一の検証ロジック（`1以上の整数を入力してください`）を個別に実装しています。`MemoField` は `maxLines: 3` の複数行テキストで、バリデーションを持ちません（空でも許可）。
 
 ---
 
-## 20. `widgets/ad_banner.dart` — アダプティブバナー広告（変更なし）
+## 23. `widgets/ad_banner.dart` — アダプティブバナー広告（変更なし）
 
 ```dart
 @override
@@ -903,7 +1197,16 @@ void didChangeDependencies() {
 
 ---
 
-## 21. `widgets/upgrade_dialog.dart` — 課金ダイアログ（変更なし）
+## 24. `widgets/upgrade_dialog.dart` — 課金ダイアログ
+
+```dart
+content: const Text(
+  '一度購入すると広告が非表示になります。\n\n'
+  '端末を変えても「購入を復元」で再適用できます。',
+),
+```
+
+説明文から「永久に」という語が削除されています。これは返金・取り消しにより購入が失効すると `purchase_provider.dart`（前述の `resolveAdFreeState`）の判定によって広告表示状態に戻りうるため、「永久に非表示になる」という誤った期待をユーザーに与えないための文言修正です。
 
 ```dart
 FilledButton.icon(
@@ -919,15 +1222,15 @@ FilledButton.icon(
 
 ---
 
-## 22. `widgets/empty_state_view.dart` / `total_summary.dart`
+## 25. `widgets/empty_state_view.dart` / `total_summary.dart`
 
-`empty_state_view.dart` はリストが空の場合に表示される `StatelessWidget` で変更ありません。`total_summary.dart` は未購入・購入済みそれぞれの合計金額を表示するコンポーネントで、`price × quantity` の合計を `fold` で計算するロジックも変更ありません。カテゴリ別セクション表示の追加後も、合計金額はカテゴリを横断した「未購入全体」「購入済全体」のまま据え置かれています（カテゴリごとの小計は現状実装されていません）。
+`empty_state_view.dart` はリストが空の場合に表示される `StatelessWidget` で変更ありません。`total_summary.dart` は未チェック・チェック済それぞれの合計金額を表示するコンポーネントで、`price × quantity` の合計を `fold` で計算するロジックも変更ありません。合計が0円のときは「未チェック -」「チェック済 -」と表示します。カテゴリ別セクション表示の追加後も、合計金額はカテゴリを横断した「未チェック全体」「チェック済全体」のまま据え置かれています（カテゴリごとの小計は現状実装されていません）。
 
 ---
 
-## 23. `widgets/help_dialog.dart` — 使い方ダイアログ
+## 26. `widgets/help_dialog.dart` — 使い方ダイアログ
 
-新機能追加のたびに `_HelpItem` を追加・更新する運用ルールがあり（プロジェクトルール「機能を追加・変更・削除したときは必ず `lib/widgets/help_dialog.dart` を同時に更新する」）、現在は以下の項目が並んでいます：商品の追加（連続入力対応）・編集・削除・購入済み一括削除・並び替え・リスト名変更・リスト追加・リスト削除・別リストへ移動、商品名の候補表示、リストの複製、よく買うものからの追加、テキストで共有、リストを共有（読み込み用）、バックアップ、読み込み（バックアップ／共有リスト）、カテゴリを管理、広告を非表示にする。
+新機能追加のたびに `_HelpItem` を追加・更新する運用ルールがあり（プロジェクトルール「機能を追加・変更・削除したときは必ず `lib/widgets/help_dialog.dart` を同時に更新する」）、現在は以下の項目が並んでいます：商品の追加（連続入力対応）・編集・削除・チェック済みを一括削除・並び替え・リスト名変更・リストの予算を設定・リスト追加・リスト削除・別リストへ移動、商品名の候補表示、リストの複製、よく買うものからの追加、テキストで共有、リストを共有（読み込み用）、バックアップ、読み込み（バックアップ／共有リスト）、カテゴリを管理、広告を非表示にする。
 
 過去に存在した「履歴から登録」（`history_select_dialog.dart` に対応する項目）は、機能自体の削除に伴い `_HelpItem` からも取り除かれています。
 
@@ -960,6 +1263,32 @@ BackupService（JSON構築・ファイルI/O・共有シート起動）
 DatabaseHelper.importData（インポート時のみ、トランザクションでマージ）
   ↓
 loadLists() / ref.invalidate(categoryProvider) で画面を再構築
+```
+
+予算表示（`BudgetSummary`）は `ItemNotifier` / `CategoryNotifier` を経由しない、独立した経路です。
+
+```
+ユーザー操作（予算入力）
+  ↓
+ShoppingListScreen._showBudgetInputDialog → _BudgetInputDialog
+  ↓
+DatabaseHelper.updateListBudget（lists.budget を直接UPDATE）
+  ↓
+loadLists() で ShoppingList 一覧を再取得 → setState で BudgetSummary が再描画
+```
+
+「よく買うもの」画面（`FavoritesScreen`）は `Navigator.push` で開く独立画面で、内部では `DatabaseHelper` を直接呼び出して自前の `_favorites`（ローカル状態）を更新します。カテゴリ別セクション表示だけは `categoryProvider`（`CategoryNotifier`）を `ref.watch` して取得します。
+
+```
+ユーザー操作（よく買うものから追加）
+  ↓
+ShoppingListScreen → Navigator.push(FavoritesScreen)
+  ↓
+FavoritesScreen._load / _addToList など（DatabaseHelper.getFavorites・addFavoriteItemsToList を直接呼ぶ）
+  ↓
+「リストに追加」時のみ ItemNotifier.changeList を呼び、現在のリストの items を再取得
+  ↓
+Navigator.pop(context, 追加件数) → ShoppingListScreen 側でSnackBar表示
 ```
 
 楽観的更新（`reorderUncheckedItems`）だけが DB書き込み前に state を更新する例外である点は変わりません。
