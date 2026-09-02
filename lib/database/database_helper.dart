@@ -663,10 +663,16 @@ CREATE TABLE IF NOT EXISTS categories (
             ? categoryIdMap[oldCategoryId]
             : null;
 
+        final rawQuantity = item['quantity'];
+        final quantity = (rawQuantity is num && rawQuantity.toInt() >= 1)
+            ? rawQuantity.toInt()
+            : 1;
+
         final copy = Map<String, dynamic>.from(item)
           ..remove('id')
           ..['listId'] = newListId
-          ..['categoryId'] = newCategoryId;
+          ..['categoryId'] = newCategoryId
+          ..['quantity'] = quantity;
         await txn.insert('items', copy);
       }
 
@@ -692,10 +698,16 @@ CREATE TABLE IF NOT EXISTS categories (
             ? categoryIdMap[oldCategoryId]
             : null;
 
+        final rawQuantity = fav['quantity'];
+        final quantity = (rawQuantity is num && rawQuantity.toInt() >= 1)
+            ? rawQuantity.toInt()
+            : 1;
+
         final copy = Map<String, dynamic>.from(fav)
           ..remove('id')
           ..['sortOrder'] = nextOrder++
-          ..['categoryId'] = newCategoryId;
+          ..['categoryId'] = newCategoryId
+          ..['quantity'] = quantity;
         await txn.insert('favorites', copy);
         insertedFavCount++;
       }

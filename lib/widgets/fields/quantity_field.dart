@@ -17,6 +17,15 @@ class QuantityField extends StatelessWidget {
         baseOffset: 0,
         extentOffset: controller.text.length,
       ),
+      validator: (value) {
+        final quantity = int.tryParse(value ?? '');
+
+        if (quantity == null || quantity < 1) {
+          return '1以上の整数を入力してください';
+        }
+
+        return null;
+      },
     );
   }
 }
