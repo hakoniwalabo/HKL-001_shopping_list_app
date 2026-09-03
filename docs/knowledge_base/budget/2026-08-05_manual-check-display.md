@@ -1,3 +1,7 @@
+**カテゴリ**: budget　**元ファイル名**: manual_check_2026-08-05-budget-display.md
+
+---
+
 # リスト予算表示機能 — 手動確認チェックリスト
 
 - 対象機能: リストごとの予算表示（設計書 `docs/spec_HKL-001_shopping_list_app_rev8.14.md` §8.13）

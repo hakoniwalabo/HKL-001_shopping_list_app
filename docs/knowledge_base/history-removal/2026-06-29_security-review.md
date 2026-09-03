@@ -1,3 +1,7 @@
+**カテゴリ**: history-removal　**元ファイル名**: security_review_2026-06-29-history-removal.md
+
+---
+
 # セキュリティレビュー：履歴機能削除
 
 **実施日**: 2026-06-29

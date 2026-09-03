@@ -1,3 +1,7 @@
+**カテゴリ**: purchase　**元ファイル名**: iap_remove_ads_registration_2026-07-28.md
+
+---
+
 # Google Play Console：広告非表示IAP商品（remove_ads）登録メモ
 
 2026-07-28、Google Play Consoleの「1回限りのアイテムを作成」フォームへの入力内容を検討した際の提案メモです。

@@ -1,3 +1,7 @@
+**カテゴリ**: general　**元ファイル名**: investigation_library_extraction_candidates_2026-08-18.md
+
+---
+
 # 調査レポート：コードのライブラリ化に関する調査・方針（2026-08-18）
 
 ## 1. 概要（目的・背景）

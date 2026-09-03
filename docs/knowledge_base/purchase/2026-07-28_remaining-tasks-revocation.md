@@ -1,3 +1,7 @@
+**カテゴリ**: purchase　**元ファイル名**: remaining_tasks_purchase_revocation_2026-07-28.md
+
+---
+
 # 返金・取り消し検知機能（purchase-revocation-detection）残タスク一覧
 
 作成日：2026-07-28

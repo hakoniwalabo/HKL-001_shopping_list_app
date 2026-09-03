@@ -1,3 +1,7 @@
+**カテゴリ**: favorites　**元ファイル名**: security_review_2026-07-28-favorites-fullscreen-and-pending-fixes.md
+
+---
+
 # セキュリティレビュー：よく買うもの全画面化・カテゴリ別表示ほか積み残し修正
 
 **実施日**: 2026-07-28
