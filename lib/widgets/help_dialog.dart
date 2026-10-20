@@ -52,6 +52,12 @@ class HelpDialog extends StatelessWidget {
               description: 'AppBar右上の「＋」ボタン（最大10件）',
             ),
             _HelpItem(
+              icon: Icons.reorder,
+              label: 'リストの並び替え',
+              description:
+                  'AppBar右上の並び替えボタン（≡アイコン）をタップすると並び替えモードになります\n表示されたハンドルをドラッグして順番を変更できます。再度ボタンを押すと通常表示に戻ります',
+            ),
+            _HelpItem(
               icon: Icons.delete_outline,
               label: 'リストを削除',
               description: 'AppBar右上の「⋮」→「リストを削除」\n（最後のリストは削除できません）',
