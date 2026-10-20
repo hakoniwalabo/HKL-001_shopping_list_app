@@ -203,18 +203,17 @@ CREATE TABLE IF NOT EXISTS categories (
 
       // 既存リストに現在の作成日時順で連番を初期セットする
       final existingRows = await db.query('lists', orderBy: 'createdAt ASC');
-      await db.transaction((txn) async {
-        final batch = txn.batch();
-        for (int i = 0; i < existingRows.length; i++) {
-          batch.update(
-            'lists',
-            {'sortOrder': i},
-            where: 'id = ?',
-            whereArgs: [existingRows[i]['id']],
-          );
-        }
-        await batch.commit(noResult: true);
-      });
+      // onUpgrade は sqflite が既にトランザクション内で実行するため、db.transaction は使わない
+      final batch = db.batch();
+      for (int i = 0; i < existingRows.length; i++) {
+        batch.update(
+          'lists',
+          {'sortOrder': i},
+          where: 'id = ?',
+          whereArgs: [existingRows[i]['id']],
+        );
+      }
+      await batch.commit(noResult: true);
     }
   }
 
