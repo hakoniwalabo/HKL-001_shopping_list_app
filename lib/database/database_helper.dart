@@ -35,7 +35,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -62,13 +62,15 @@ CREATE TABLE lists(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT,
   createdAt INTEGER,
-  budget INTEGER NOT NULL DEFAULT 0
+  budget INTEGER NOT NULL DEFAULT 0,
+  sortOrder INTEGER NOT NULL DEFAULT 0
 )
 ''');
 
     await db.insert('lists', {
       'name': '買い物リスト',
       'createdAt': DateTime.now().millisecondsSinceEpoch,
+      'sortOrder': 0,
     });
 
     await db.execute('''
@@ -188,6 +190,31 @@ CREATE TABLE IF NOT EXISTS categories (
       } catch (_) {
         // カラムが既に存在する場合は無視
       }
+    }
+
+    if (oldVersion < 9) {
+      try {
+        await db.execute(
+          'ALTER TABLE lists ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0',
+        );
+      } catch (_) {
+        // カラムが既に存在する場合は無視
+      }
+
+      // 既存リストに現在の作成日時順で連番を初期セットする
+      final existingRows = await db.query('lists', orderBy: 'createdAt ASC');
+      await db.transaction((txn) async {
+        final batch = txn.batch();
+        for (int i = 0; i < existingRows.length; i++) {
+          batch.update(
+            'lists',
+            {'sortOrder': i},
+            where: 'id = ?',
+            whereArgs: [existingRows[i]['id']],
+          );
+        }
+        await batch.commit(noResult: true);
+      });
     }
   }
 
