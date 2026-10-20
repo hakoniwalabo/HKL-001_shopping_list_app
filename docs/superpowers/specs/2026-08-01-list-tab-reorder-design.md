@@ -2,7 +2,7 @@
 
 **作成日：2026-08-01**
 **対象バージョン：** spec rev9.0 の次リビジョン（rev9.1想定）に追加
-**ステータス：設計承認済み・未実装**（マスターの指示により、実装計画（writing-plans）の作成はまだ行っていない。実装に進む際は改めて指示を受けること）。2026-10-21 に版数・行番号のみ補正（設計内容は変更なし）。ヘルプ文言のアイコン表記のみ ⇅→≡ に補正。
+**ステータス：実装済み**（2026-10-21、spec rev9.1 に反映済み）。設計承認後、2026-10-21 に版数・行番号のみ補正（設計内容は変更なし）。ヘルプ文言のアイコン表記のみ ⇅→≡ に補正。実装時に §3.1.3 の `ListReorderBar` を `SizedBox(height: preferredSize.height)` で包む補正を反映（`AppBar.bottom` は高さ無制約のため）。
 
 ---
 
@@ -159,26 +159,30 @@ class ListReorderBar extends StatelessWidget implements PreferredSizeWidget {
       return const SizedBox.shrink();
     }
 
-    return ReorderableListView.builder(
-      scrollDirection: Axis.horizontal,
-      buildDefaultDragHandles: false,
-      itemCount: shoppingLists.length,
-      onReorderItem: (oldIndex, newIndex) =>
-          onReorder(oldIndex, newIndex),
-      itemBuilder: (context, index) {
-        final list = shoppingLists[index];
-        return Padding(
-          key: ValueKey(list.id),
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: ReorderableDragStartListener(
-            index: index,
-            child: Chip(
-              avatar: const Icon(Icons.drag_handle, size: 18),
-              label: Text(list.name),
+    // AppBar.bottom は高さ無制約で配置されるため、横方向のリストには高さを明示する
+    return SizedBox(
+      height: preferredSize.height,
+      child: ReorderableListView.builder(
+        scrollDirection: Axis.horizontal,
+        buildDefaultDragHandles: false,
+        itemCount: shoppingLists.length,
+        onReorderItem: (oldIndex, newIndex) =>
+            onReorder(oldIndex, newIndex),
+        itemBuilder: (context, index) {
+          final list = shoppingLists[index];
+          return Padding(
+            key: ValueKey(list.id),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: ReorderableDragStartListener(
+              index: index,
+              child: Chip(
+                avatar: const Icon(Icons.drag_handle, size: 18),
+                label: Text(list.name),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -192,6 +196,7 @@ class ListReorderBar extends StatelessWidget implements PreferredSizeWidget {
 - **`onReorderItem` を使用する（`onReorder` は使用しない）。** 本プロジェクトでは `ReorderableListView` の並び替えコールバックとして一貫して `onReorderItem`（Flutter 3.44.0 で追加されたAPI）を採用している（`lib/widgets/list_section.dart` 65行目、`lib/screens/favorites_screen.dart` 223行目）。このAPIでは `newIndex` が「削除後の挿入位置」を表すため、旧 `onReorder` で必要だった `if (newIndex > oldIndex) newIndex--;` の補正は行わない。
 - 各行の `key` には `ValueKey(list.id)` を指定する（`Reorderable*` 系ウィジェットの必須要件）。
 - ドラッグハンドルは `ReorderableDragStartListener` でラップした `Icons.drag_handle` アイコンとし、既存の商品・よく買うもの並び替えのハンドルアイコンと統一する。`ReorderableDragStartListener` は長押し不要で `PointerDown` から即ドラッグを開始する（`favorites` 並び替え実装時の知見。長押しでリネームが開く `ListTabBar` とは表示自体が切り替わっているため、トリガー面での衝突はない）。
+- **`ReorderableListView.builder` は `SizedBox(height: preferredSize.height)` で包む。** `AppBar.bottom` は高さ無制約（unbounded）で子を配置するため、包まないと横方向の `ReorderableListView` が `Horizontal viewport was given unbounded height` 例外を出す。回帰防止として `test/list_reorder_bar_test.dart` にウィジェットテストがある。
 - `preferredSize` を `ListTabBar` と同じ `Size.fromHeight(kToolbarHeight)` にすることで、並び替えモードON/OFF切り替え時にAppBarの高さが変化しないようにする。
 
 #### 3.1.4 `ShoppingListScreen`（`lib/screens/shopping_list_screen.dart`）の変更
