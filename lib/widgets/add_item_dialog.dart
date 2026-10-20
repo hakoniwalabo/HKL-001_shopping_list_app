@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/database_helper.dart';
 import '../models/category.dart';
+import '../models/favorite_suggestion.dart';
 import '../models/item.dart';
 import '../providers/category_provider.dart';
 import '../providers/item_provider.dart';
@@ -57,6 +58,8 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
   int _addedCount = 0;
   int? _selectedCategoryId;
   bool _addToFavorites = false;
+  bool _categoryFromFavorite = false;
+  List<FavoriteSuggestion> _favorites = [];
 
   @override
   void initState() {
@@ -69,6 +72,29 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
     );
     _memoCtrl = TextEditingController(text: item?.memo ?? '');
     _selectedCategoryId = item?.categoryId;
+    if (item == null) _loadFavorites();
+  }
+
+  Future<void> _loadFavorites() async {
+    final data = await DatabaseHelper.instance.getFavorites();
+    if (!mounted) return;
+    setState(() {
+      _favorites = data.map(FavoriteSuggestion.fromMap).toList();
+    });
+  }
+
+  void _applyFavorite(FavoriteSuggestion fav) {
+    final categories = ref.read(categoryProvider).value ?? <Category>[];
+    final categoryId =
+        categories.any((c) => c.id == fav.categoryId) ? fav.categoryId : null;
+    setState(() {
+      _nameCtrl.text = fav.name;
+      _quantityCtrl.text = fav.quantity.toString();
+      _priceCtrl.text = fav.price.toString();
+      _selectedCategoryId = categoryId;
+      _categoryFromFavorite = categoryId != null;
+      _addToFavorites = false;
+    });
   }
 
   @override
@@ -146,6 +172,10 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
       }
       setState(() {
         _addedCount++;
+        if (_categoryFromFavorite) {
+          _selectedCategoryId = null;
+          _categoryFromFavorite = false;
+        }
       });
       _nameCtrl.value = TextEditingValue.empty;
       _priceCtrl.text = '0';
@@ -222,7 +252,10 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
     if (confirmed != true || newName.isEmpty || !mounted) return;
     final id = await ref.read(categoryProvider.notifier).addCategory(newName);
     if (!mounted) return;
-    setState(() => _selectedCategoryId = id);
+    setState(() {
+      _selectedCategoryId = id;
+      _categoryFromFavorite = false;
+    });
   }
 
   @override
@@ -257,6 +290,19 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
                   controller: _nameCtrl,
                   focusNode: _nameFocus,
                   candidateNames: widget.candidateNames,
+                  favoriteSuggestions: isEdit
+                      ? const []
+                      : _favorites
+                          .map(
+                            (f) => f.withCategoryName(
+                              categories
+                                  .where((c) => c.id == f.categoryId)
+                                  .firstOrNull
+                                  ?.name,
+                            ),
+                          )
+                          .toList(),
+                  onFavoriteSelected: isEdit ? null : _applyFavorite,
                 ),
                 const SizedBox(height: 12),
                 QuantityField(controller: _quantityCtrl),
@@ -290,7 +336,10 @@ class _AddItemDialogContentState extends ConsumerState<_AddItemDialogContent> {
                             ),
                           ),
                         ],
-                        onChanged: (v) => setState(() => _selectedCategoryId = v),
+                        onChanged: (v) => setState(() {
+                          _selectedCategoryId = v;
+                          _categoryFromFavorite = false;
+                        }),
                       ),
                     ),
                     const SizedBox(width: 8),
