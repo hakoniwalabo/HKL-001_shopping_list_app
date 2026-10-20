@@ -9,7 +9,7 @@ lib/
 │   ├── item.dart                      # 商品データモデル
 │   ├── category.dart                  # カテゴリデータモデル
 │   ├── favorite_suggestion.dart       # 予測候補用「よく買うもの」モデル（FavoriteSuggestion）
-│   └── shopping_list.dart             # リストデータモデル（budgetフィールドあり）
+│   └── shopping_list.dart             # リストデータモデル（budget・sortOrderフィールドあり）
 ├── database/
 │   └── database_helper.dart           # SQLite永続化層（items / lists / favorites / categories）
 ├── providers/
@@ -32,7 +32,8 @@ lib/
     ├── empty_state_view.dart          # 空リスト表示
     ├── help_dialog.dart               # 使い方ダイアログ
     ├── item_tile.dart                 # 商品リスト行
-    ├── list_management_buttons.dart   # AppBarのリスト追加・複製ボタン群
+    ├── list_management_buttons.dart   # AppBarのリスト追加・複製・並び替えトグルボタン群
+    ├── list_reorder_bar.dart          # 並び替えモード用の水平並び替えバー
     ├── list_section.dart              # カテゴリ別／未チェック・チェック済セクション
     ├── list_tab_bar.dart              # タブバー
     ├── total_summary.dart             # 合計金額表示
@@ -145,15 +146,19 @@ class ShoppingList {
   final String name;
   final int createdAt;
   final int budget;
+  final int sortOrder;
 
   ShoppingList({
     this.id,
     required this.name,
     int? createdAt,
     this.budget = 0,
+    this.sortOrder = 0,
   }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 }
 ```
+
+`sortOrder`（リストの表示順、小さいほど左）はリスト並び替え機能で追加されたフィールドです。`toMap()` に含まれ、`fromMap()` では `map['sortOrder'] ?? 0` とすることで、`sortOrder` を持たない古いデータでも `0` にフォールバックします。`copyWith()` にも `sortOrder` が加わっています。なお、`DatabaseHelper.insertList` は渡された `sortOrder` を使わず末尾になるよう採番し直すため、新規作成時にこの値を指定する必要はありません。
 
 `budget`（予算）フィールドが新規追加されました。デフォルトは `0` で、これは「予算未設定」を意味する特別値として扱われます（`0` と「未設定」を区別する専用フラグは持たず、`widgets/budget_summary.dart` 側で `budget == 0` を「未設定」と解釈する設計です）。
 
@@ -176,12 +181,12 @@ Future<Database> get database async {
 }
 ```
 
-### テーブル構成（version 8）
+### テーブル構成（version 9）
 
 | テーブル名 | 役割 |
 |---|---|
 | `items` | 買い物商品。`listId` でリストに、`categoryId` でカテゴリに紐付け |
-| `lists` | 複数リストの管理。`budget INTEGER NOT NULL DEFAULT 0`（予算、新規） |
+| `lists` | 複数リストの管理。`budget INTEGER NOT NULL DEFAULT 0`（予算）、`sortOrder INTEGER NOT NULL DEFAULT 0`（表示順・小さいほど左、新規） |
 | `favorites` | よく買うもの（独立したマスタデータ）。`categoryId` を持つ |
 | `categories` | カテゴリマスタ（`name` / `sortOrder`） |
 
@@ -221,7 +226,30 @@ if (oldVersion < 8) {
 }
 ```
 
-version 8 で追加された分岐が、予算表示機能のためのマイグレーションです。`ALTER TABLE ADD COLUMN ... DEFAULT 0` により、既存の全リストは自動的に「予算未設定（0円）」として扱われます。`try/catch` で二重適用を握りつぶす方針、`CREATE TABLE IF NOT EXISTS` の冪等性は、version 7までのマイグレーション方針をそのまま踏襲しています。`resolveListName`・`duplicateList`・カテゴリCRUD（`insertCategory`／`deleteCategory`）のロジック自体には変更がありません。
+version 8 で追加された分岐が、予算表示機能のためのマイグレーションです。`ALTER TABLE ADD COLUMN ... DEFAULT 0` により、既存の全リストは自動的に「予算未設定（0円）」として扱われます。`try/catch` で二重適用を握りつぶす方針、`CREATE TABLE IF NOT EXISTS` の冪等性は、version 7までのマイグレーション方針をそのまま踏襲しています。`resolveListName`・カテゴリCRUD（`insertCategory`／`deleteCategory`）のロジック自体には変更がありません。
+
+```dart
+// version < 9: lists に sortOrder カラムを追加し、作成日時順で初期連番をセット
+if (oldVersion < 9) {
+  try {
+    await db.execute(
+      'ALTER TABLE lists ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0',
+    );
+  } catch (_) {
+    // カラムが既に存在する場合は無視
+  }
+
+  final existingRows = await db.query('lists', orderBy: 'createdAt ASC');
+  // onUpgrade は sqflite が既にトランザクション内で実行するため、db.transaction は使わない
+  final batch = db.batch();
+  for (int i = 0; i < existingRows.length; i++) {
+    batch.update('lists', {'sortOrder': i}, where: 'id = ?', whereArgs: [existingRows[i]['id']]);
+  }
+  await batch.commit(noResult: true);
+}
+```
+
+version 9 はリスト並び替え機能のためのマイグレーションです。`ALTER TABLE` だけでは全行が `sortOrder = 0` になり順序が不定になるため、既存リストを `createdAt` 昇順に並べて `0, 1, 2, …` を初期セットし、アップグレード前の表示順を保ちます。`onUpgrade` はsqfliteが既にトランザクション内で実行するため、ここで `db.transaction` を使うとネストしてしまうので `db.batch()` のみを使っています。`onCreate` 側の `lists` テーブル定義にも `sortOrder INTEGER NOT NULL DEFAULT 0` が加わり、初期リスト「買い物リスト」は `sortOrder: 0` で挿入されます。
 
 ### `insertItem` と `insertItemWithId` の使い分け（変更なし）
 
@@ -257,6 +285,35 @@ Future<int> duplicateList(int sourceListId, String newName) async {
 ```
 
 新規リストを作成し、元リストの商品を丸ごとコピーします。`isChecked` を強制的に `0` にリセットするのが仕様上のポイントで、「次回の買い物用にリストを使い回す」というユースケースを想定しています。`categoryId` は `Map.from(item)` でそのままコピーされるため、カテゴリ分類も維持されます。
+
+リストは末尾に追加されます。新規リストの作成時に `sortOrder` を `MAX(sortOrder) + 1` で採番しており、同じ採番が `insertList` にもあります（呼び出し元が渡した `sortOrder` は無視し、`id` も取り除いて採番し直します）。
+
+```dart
+final maxOrderResult = await txn.rawQuery('SELECT MAX(sortOrder) as maxOrder FROM lists');
+final maxOrder = (maxOrderResult.first['maxOrder'] as int?) ?? -1;
+final newListId = await txn.insert('lists', {
+  'name': newName,
+  'createdAt': DateTime.now().millisecondsSinceEpoch,
+  'sortOrder': maxOrder + 1,
+});
+```
+
+### `updateListOrder` — リスト並び順の確定（新規）
+
+```dart
+Future<void> updateListOrder(List<ShoppingList> lists) async {
+  final db = await database;
+  await db.transaction((txn) async {
+    final batch = txn.batch();
+    for (int i = 0; i < lists.length; i++) {
+      batch.update('lists', {'sortOrder': i}, where: 'id = ?', whereArgs: [lists[i].id]);
+    }
+    await batch.commit(noResult: true);
+  });
+}
+```
+
+渡された `lists` の並びどおりに、全件の `sortOrder` を `0, 1, 2, …` で振り直します。1つのトランザクションで一括更新するため、途中で失敗しても中途半端な並び順は残りません。呼び出し元は `shopping_list_screen.dart` の `_onReorderList` です。
 
 ### `resolveListName` — リスト名の衝突解決（新規、バックアップインポートで使用）
 
@@ -346,7 +403,23 @@ final newId = await txn.insert('lists', {
 final baseCreatedAt = ((maxCreatedAtResult.first['maxAt'] as int?) ?? DateTime.now().millisecondsSinceEpoch) + 1;
 ```
 
-`getLists()` は `orderBy: 'createdAt ASC'` で並んでいるため、バックアップ元の `createdAt` をそのまま使うとインポートしたリストが既存リストの間に割り込んで表示される可能性があります。これを避けるため、現在のDB内の最大 `createdAt` + 連番を新たに採番しています。プロジェクトルールに「インポート処理でバックアップのメタデータ（`createdAt`等）を流用せず、現在のDB最大値+連番を設定する」と明記された知見です。
+リストの表示順は `getLists()` の `orderBy: 'sortOrder ASC'` で決まります（DB v9 以前は `createdAt ASC` でした）。バックアップ元の値をそのまま使うとインポートしたリストが既存リストの間に割り込んで表示される可能性があるため、現在のDB内の最大値から新たに採番しています。`createdAt` は最大 `createdAt` + 連番、`sortOrder` は下記のとおり現在の最大 `sortOrder` + 連番で、どちらもバックアップ内の値は使いません。プロジェクトルールに「インポート処理でバックアップのメタデータ（`createdAt`等）を流用せず、現在のDB最大値+連番を設定する」と明記された知見です。
+
+**`sortOrder` も現在のDB最大値+連番で採番する。**
+
+```dart
+final maxListOrderResult = await txn.rawQuery('SELECT MAX(sortOrder) as maxOrder FROM lists');
+int nextListSortOrder = ((maxListOrderResult.first['maxOrder'] as int?) ?? -1) + 1;
+
+for (final list in incomingLists) {
+  final newId = await txn.insert('lists', {
+    ...
+    'sortOrder': nextListSortOrder++,
+  });
+}
+```
+
+インポートしたリストは、インポート順のまま既存リストの末尾（一番右）に並びます。
 
 ---
 
@@ -691,6 +764,62 @@ if (existingNames.contains(baseName)) {
 ### タブコントローラー管理・`_handleTabChange`（変更なし）
 
 `loadLists` でのTabController再構築、`_isChangingTab` フラグによる二重実行防止のロジックは前バージョンから変わっていません。
+
+### リスト並び替えモード（`_isReorderMode` / `_toggleReorderMode` / `_onReorderList`）
+
+```dart
+bool _isReorderMode = false;
+
+void _toggleReorderMode() {
+  setState(() {
+    _isReorderMode = !_isReorderMode;
+  });
+
+  // 並び替えモードを終了する際、TabController のインデックスが
+  // currentListId の新しい位置とズレていないか確認し、必要なら同期する。
+  if (!_isReorderMode && _tabController != null) {
+    final index = shoppingLists.indexWhere((e) => e.id == currentListId);
+    if (index != -1 && index != _tabController!.index) {
+      _tabController!.animateTo(index);
+    }
+  }
+}
+
+Future<void> _onReorderList(int oldIndex, int newIndex) async {
+  final reordered = [...shoppingLists];
+  final moved = reordered.removeAt(oldIndex);
+  reordered.insert(newIndex, moved);
+
+  // 楽観的更新（items の並び替えと同一パターン）
+  setState(() => shoppingLists = reordered);
+
+  try {
+    await DatabaseHelper.instance.updateListOrder(reordered);
+  } catch (_) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('並び替えの保存に失敗しました')),
+    );
+    await loadLists();
+  }
+}
+```
+
+AppBarの並び替えボタン（`ListManagementButtons`）が `_toggleReorderMode` を呼び、`_isReorderMode` をトグルします。`AppBar.bottom` はこのフラグで分岐し、通常時は `ListTabBar`、並び替えモード中は `ListReorderBar` を表示します。
+
+```dart
+bottom: _isReorderMode
+    ? ListReorderBar(shoppingLists: shoppingLists, onReorder: _onReorderList)
+    : ListTabBar(shoppingLists: shoppingLists, tabController: _tabController, onRenameTab: _showRenameListDialog),
+```
+
+設計上の要点は2つです。
+
+**楽観的更新と失敗時の再同期。** `_onReorderList` は、DBへの保存を待たずに先に `shoppingLists` を並べ替えて `setState` し、ドラッグ直後に画面へ反映します。商品の並び替え（`reorderUncheckedItems`）と同じパターンです。保存に失敗した場合は SnackBar を表示し、`loadLists()` でDBの状態を読み直して画面を元に戻します。
+
+**モード終了時の `TabController` 同期。** 並び替え中も `TabController` 自体は作り直されないため、並び替えで `currentListId` のリストの位置が変わると、`TabController.index` と食い違います。モードを終了して `ListTabBar` が再び表示される前に、`currentListId` の新しい位置を `indexWhere` で求め、ズレていれば `animateTo` で補正します。この考え方は `loadLists()` 内の `currentIndex` の算出ロジックと同じです。
+
+なお、起動時に表示されるリスト（`data.first`）は `sortOrder` が最小、つまり一番左のリストです。
 
 ### `_shareCurrentList`（テキスト共有）と `_shareListFile`（ファイル共有）の使い分け
 
@@ -1059,6 +1188,8 @@ ReorderableListView(
 
 ## 18. `widgets/list_tab_bar.dart` — タブバー（変更なし）
 
+`ListTabBar` 自体は変更されていませんが、リスト並び替えモード中は `AppBar.bottom` が `ListReorderBar` に差し替わるため、描画されません（詳細は第20節および第11節の「リスト並び替えモード」を参照）。
+
 ```dart
 Tab(
   child: GestureDetector(
@@ -1073,12 +1204,14 @@ Tab(
 
 ---
 
-## 19. `widgets/list_management_buttons.dart` — リスト追加・複製ボタン（新規）
+## 19. `widgets/list_management_buttons.dart` — リスト追加・複製・並び替えボタン
 
 ```dart
 class ListManagementButtons extends StatelessWidget {
   final VoidCallback onAddList;
   final VoidCallback onDuplicateList;
+  final VoidCallback onToggleReorderMode;
+  final bool isReorderMode;
 
   Widget build(BuildContext context) {
     return Row(
@@ -1086,17 +1219,78 @@ class ListManagementButtons extends StatelessWidget {
       children: [
         IconButton(onPressed: onAddList, icon: const Icon(Icons.add), tooltip: 'リストを追加'),
         IconButton(onPressed: onDuplicateList, icon: const Icon(Icons.copy_outlined), tooltip: 'リストを複製'),
+        IconButton(
+          onPressed: onToggleReorderMode,
+          icon: Icon(
+            Icons.reorder,
+            color: isReorderMode ? Theme.of(context).colorScheme.primary : null,
+          ),
+          tooltip: isReorderMode ? '並び替えを終了' : 'リストを並び替え',
+        ),
       ],
     );
   }
 }
 ```
 
-AppBarの `actions` に並ぶボタン群のうち「追加」「複製」の2つを1つのWidgetに切り出したものです。単純な `StatelessWidget` で、コールバックを2つ受け取るだけの薄いラッパーですが、`shopping_list_screen.dart` のbuildメソッドの見通しを良くする目的で分離されています。
+AppBarの `actions` に並ぶボタン群のうち「追加」「複製」「並び替え」の3つを1つのWidgetに切り出したものです。単純な `StatelessWidget` で、コールバックを3つ（`onAddList`・`onDuplicateList`・`onToggleReorderMode`）と並び替えモードの状態 `isReorderMode` を受け取るだけの薄いラッパーですが、`shopping_list_screen.dart` のbuildメソッドの見通しを良くする目的で分離されています。並び替えボタンは `Icons.reorder`（≡）で、並び替えモード中はアイコンがテーマのプライマリ色になり、ツールチップも「並び替えを終了」に切り替わるため、モードのON/OFFが視覚的に分かります。
 
 ---
 
-## 20. `widgets/budget_summary.dart` — リストごとの予算表示（新規）
+## 20. `widgets/list_reorder_bar.dart` — 並び替えモード用の水平並び替えバー（新規）
+
+```dart
+class ListReorderBar extends StatelessWidget implements PreferredSizeWidget {
+  final List<ShoppingList> shoppingLists;
+  final Future<void> Function(int oldIndex, int newIndex) onReorder;
+
+  Widget build(BuildContext context) {
+    if (shoppingLists.isEmpty) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: preferredSize.height,
+      child: ReorderableListView.builder(
+        scrollDirection: Axis.horizontal,
+        buildDefaultDragHandles: false,
+        itemCount: shoppingLists.length,
+        onReorderItem: (oldIndex, newIndex) => onReorder(oldIndex, newIndex),
+        itemBuilder: (context, index) {
+          final list = shoppingLists[index];
+          return Padding(
+            key: ValueKey(list.id),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: ReorderableDragStartListener(
+              index: index,
+              child: Chip(avatar: const Icon(Icons.drag_handle, size: 18), label: Text(list.name)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+}
+```
+
+並び替えモード中に、`ListTabBar` の代わりに `AppBar.bottom` へ差し込まれるウィジェットです。`ListTabBar` と同じく `PreferredSizeWidget` を実装し、`preferredSize` を同じ `kToolbarHeight` にすることで、モードの切り替え時にAppBarの高さが変わらないようにしています。各リストを `Chip`（ドラッグハンドルのアイコン＋リスト名）として横一列に並べ、チップをドラッグして順序を入れ替えます。
+
+実装上のポイントは4つあります。
+
+**`SizedBox(height: preferredSize.height)` で包む。** `AppBar.bottom` は高さ無制約で子を配置するため、包まずに横方向の `ReorderableListView` を置くと `Horizontal viewport was given unbounded height` 例外になります。回帰防止として `test/list_reorder_bar_test.dart` にウィジェットテストがあります。
+
+**`onReorderItem` を使う。** `list_section.dart`・`favorites_screen.dart` と同じく `onReorderItem` を採用しており、`newIndex` は「削除後の挿入位置」を表すため、旧 `onReorder` のような `newIndex--` の補正は不要です。
+
+**`buildDefaultDragHandles: false` ＋ `ReorderableDragStartListener`。** 既定のハンドルを無効にし、チップ全体を `ReorderableDragStartListener` で包むことで、長押しなしで触れた瞬間にドラッグが始まります。このため、水平バー上のチップを横にスワイプするとスクロールではなくドラッグになります（チップ間の隙間のスワイプやドラッグ端での自動スクロールで端のチップに到達できます）。
+
+**各チップの `key` は `ValueKey(list.id)`。** `Reorderable*` 系ウィジェットの必須要件です。
+
+並び替えの確定処理自体はこのウィジェットでは行わず、コールバック `onReorder` を通じて `ShoppingListScreen._onReorderList` に委ねます。
+
+---
+
+## 21. `widgets/budget_summary.dart` — リストごとの予算表示（新規）
 
 ```dart
 class BudgetSummary extends StatelessWidget {
@@ -1144,7 +1338,7 @@ BudgetSummary(
 
 ---
 
-## 21. `widgets/fields/item_name_field.dart` — 商品名入力と候補表示
+## 22. `widgets/fields/item_name_field.dart` — 商品名入力と候補表示
 
 **重要な注意：** このWidgetは過去に存在した「入力履歴（`item_history` テーブル）ベースのオートコンプリート」とは別物です。履歴ベースの機能は2026-06-29に完全に削除されており、現在の `ItemNameField` は呼び出し元から渡された `candidateNames`（現在のリスト内の商品名、または「よく買うもの」の登録名）と、商品追加ダイアログから渡される `favoriteSuggestions`（「よく買うもの」の詳細つき候補）を表示するだけの、DBに依存しないシンプルな実装です。
 
@@ -1198,7 +1392,7 @@ List<NameSuggestion> buildNameSuggestions({
 
 ---
 
-## 22. `widgets/fields/price_field.dart` / `quantity_field.dart` / `memo_field.dart` — 入力フィールド群
+## 23. `widgets/fields/price_field.dart` / `quantity_field.dart` / `memo_field.dart` — 入力フィールド群
 
 いずれも `StatelessWidget` で `TextFormField` を薄くラップしただけの単純なコンポーネントです。
 
@@ -1230,7 +1424,7 @@ validator: (value) {
 
 ---
 
-## 23. `widgets/ad_banner.dart` — アダプティブバナー広告（変更なし）
+## 24. `widgets/ad_banner.dart` — アダプティブバナー広告（変更なし）
 
 ```dart
 @override
@@ -1244,7 +1438,7 @@ void didChangeDependencies() {
 
 ---
 
-## 24. `widgets/upgrade_dialog.dart` — 課金ダイアログ
+## 25. `widgets/upgrade_dialog.dart` — 課金ダイアログ
 
 ```dart
 content: const Text(
@@ -1269,13 +1463,13 @@ FilledButton.icon(
 
 ---
 
-## 25. `widgets/empty_state_view.dart` / `total_summary.dart`
+## 26. `widgets/empty_state_view.dart` / `total_summary.dart`
 
 `empty_state_view.dart` はリストが空の場合に表示される `StatelessWidget` で変更ありません。`total_summary.dart` は未チェック・チェック済それぞれの合計金額を表示するコンポーネントで、`price × quantity` の合計を `fold` で計算するロジックも変更ありません。合計が0円のときは「未チェック -」「チェック済 -」と表示します。カテゴリ別セクション表示の追加後も、合計金額はカテゴリを横断した「未チェック全体」「チェック済全体」のまま据え置かれています（カテゴリごとの小計は現状実装されていません）。
 
 ---
 
-## 26. `widgets/help_dialog.dart` — 使い方ダイアログ
+## 27. `widgets/help_dialog.dart` — 使い方ダイアログ
 
 新機能追加のたびに `_HelpItem` を追加・更新する運用ルールがあり（プロジェクトルール「機能を追加・変更・削除したときは必ず `lib/widgets/help_dialog.dart` を同時に更新する」）、現在は以下の項目が並んでいます：商品の追加（連続入力対応）・編集・削除・チェック済みを一括削除・並び替え・リスト名変更・リストの予算を設定・リスト追加・リスト削除・別リストへ移動、商品名の候補表示（現在のリスト内の商品名に加え、商品追加時は「よく買うもの」も星つきで表示）、リストの複製、よく買うものからの追加、テキストで共有、リストを共有（読み込み用）、バックアップ、読み込み（バックアップ／共有リスト）、カテゴリを管理、広告を非表示にする。
 
@@ -1338,4 +1532,18 @@ FavoritesScreen._load / _addToList など（DatabaseHelper.getFavorites・addFav
 Navigator.pop(context, 追加件数) → ShoppingListScreen 側でSnackBar表示
 ```
 
-楽観的更新（`reorderUncheckedItems`）だけが DB書き込み前に state を更新する例外である点は変わりません。
+リスト（タブ）の並び替えも `ItemNotifier` を経由しない、画面側の独立した経路です。
+
+```
+ユーザー操作（並び替えボタンで並び替えモードON → チップをドラッグ）
+  ↓
+ListReorderBar（ReorderableListView.builder の onReorderItem）
+  ↓
+ShoppingListScreen._onReorderList（shoppingLists を並べ替えて setState ＝ 楽観的更新）
+  ↓
+DatabaseHelper.updateListOrder（lists.sortOrder を 0,1,2,… で全件UPDATE）
+  ↓
+失敗時のみ SnackBar 表示 ＋ loadLists() で DB の状態に再同期
+```
+
+楽観的更新（`reorderUncheckedItems` と、リスト並び替えの `_onReorderList`）だけが DB書き込み前に state を更新する例外である点は変わりません。
