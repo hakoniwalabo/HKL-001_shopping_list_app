@@ -1,6 +1,6 @@
 # HKL-001 買い物リストアプリ 設計書
 
-**Rev 8.15　2026年改訂**
+**Rev 9.0　2026年改訂**
 
 ---
 
@@ -32,6 +32,7 @@
 | 8.13 | 2026-08-01    | UI表記の「タブ」を「リスト」に統一（タブ名変更ダイアログ・別リストへ移動メニュー・ヘルプ文言）。設計書内の対応する記述も同様に更新（`TabBar`/`TabController` 等のウィジェット名は変更なし）                                                                                                                                                                                                                                                                             |     |
 | 8.14 | 2026-08-04    | リストごとの予算表示機能を追加（`ShoppingList` に `budget` フィールド追加・`lists` テーブルに `budget` カラム追加（DB v8）・`BudgetSummary` ウィジェット新規追加・`TotalSummary` 直上・画面左端に配置・タップで予算入力ダイアログを開き設定。入力欄は現在値（未設定時は`0`）を初期表示）。付随変更として `TotalSummary`（未チェック合計／チェック済合計）を0円時ハイフン表示に統一（`item_tile.dart` の単価0円時ハイフン表示と統一）。UI表記「未購入」「購入済」を「未チェック」「チェック済」へ全面的に統一（リストのセクション見出し・合計表示・共有テキスト・ヘルプ文言・削除確認ダイアログ等。広告なし購入（IAP）を指す「購入済み」表記は対象外） |     |
 | 8.15 | 2026-09-02    | 商品追加・編集ダイアログの個数フィールドに「1以上の整数」のバリデーション（`quantity_field.dart`）を実装。本設計書8.1節には既に「個数：1以上の整数」と記載済みだったが、実装側でバリデーションが未実装のまま空欄・0が自動的に1へ丸められる状態になっていた乖離を解消（設計書の記載内容自体は変更なし）。あわせてバックアップインポート処理（`database_helper.dart` の `importData()`）でも items・favorites 双方の `quantity` 値をサニタイズし、不正値（0以下・非数値・欠落）は1へ補正してからINSERTするよう変更。versionCode=12（1.2.3+12） |     |
+| 9.0  | 2026-10-21    | 商品追加ダイアログ（新規追加時のみ）の商品名候補表示に「よく買うもの」を追加（8.9節）。候補は合計最大8件（よく買うもの最大5件→残りを履歴〈`candidateNames`〉）で、よく買うもの候補は星アイコン付き・subtitleに「×個数　¥価格　カテゴリ名」を表示。選択すると名前・個数・価格・カテゴリをフォームへ入力し「よく買うものに登録」チェックはOFFになる。編集ダイアログではよく買うもの候補を出さない。連続追加時はよく買うもの由来のカテゴリのみ追加後にリセット。新規モデル `FavoriteSuggestion`（`lib/models/favorite_suggestion.dart`）・`buildNameSuggestions()` を追加（commit `8a9e4bc`）。ヘルプ画面の「商品名の候補表示」も更新 |     |
 
 ---
 
@@ -153,7 +154,7 @@ lib/
 | リスト追加 | 新規リスト追加（上限：最大10リスト） |
 | リスト削除 | リスト削除（紐付きitemsをCASCADE削除） |
 | リスト名変更 | 長押しで名前編集 |
-| 商品名候補表示 | 商品名入力欄（追加・編集／よく買うもの直接登録）にフォーカスがある状態で1文字以上入力すると、現在のリスト内またはよく買うもの一覧内の既存商品名から大文字小文字を区別しない部分一致で最大8件をリアルタイム表示。DB永続化なし・頻度順表示ではない（空文字時は非表示） |
+| 商品名候補表示 | 商品名入力欄（追加・編集／よく買うもの直接登録）にフォーカスがある状態で1文字以上入力すると、現在のリスト内またはよく買うもの一覧内の既存商品名から大文字小文字を区別しない部分一致で最大8件をリアルタイム表示。商品追加ダイアログ（新規追加時のみ）では「よく買うもの」（最大5件・星アイコン付き・個数／価格／カテゴリ表示）も候補に含まれ、選択すると名前・個数・価格・カテゴリが入力される（8.9節参照）。DB永続化なし・頻度順表示ではない（空文字時は非表示） |
 | リストごとの予算表示 | リストごとに予算額を設定・表示（TotalSummary直上に固定表示。タップで入力ダイアログを開く。0円＝未設定として「予算 -」表示） |
 | 合計表示 | 税込合計（タブ直下固定表示。未チェック/チェック済みを並列表示。それぞれ0円のときは「未チェック -」「チェック済 -」と表示） |
 | 別リストへ移動 | 商品を長押しして移動先リストを選択 |
@@ -449,16 +450,17 @@ TotalSummary(items: items)
 
 ### 8.9 商品名候補表示機能
 
-商品名入力欄（`ItemNameField`）にフォーカスがある状態で1文字以上入力すると、既存の商品名から候補をリアルタイムに絞り込んで表示する。DB への永続化は行わず、頻度順表示でもない。
+商品名入力欄（`ItemNameField`）にフォーカスがある状態で1文字以上入力すると、既存の商品名から候補をリアルタイムに絞り込んで表示する。商品追加ダイアログ（新規追加時のみ）では、履歴候補に加えて「よく買うもの」も候補に含まれる。DB への永続化は行わず、頻度順表示でもない。
 
-> **経緯:** 旧・履歴DB方式（`item_history` テーブル・`upsertHistory`・`getHistoryNames`・`HistorySelectDialog`）は 2026-06-29（commit `d9e408e`）で完全に削除された。その際、前日追加されていた本機能（`candidateNames` ベースの候補表示）まで誤って巻き込んで削除されていたため、2026-07-05（commit `c68da52`）に本機能のみを復元した。旧・履歴DB方式は復元対象外であり、今後もこのセクションで説明する `candidateNames` 方式のみが実装されている。
+> **経緯:** 旧・履歴DB方式（`item_history` テーブル・`upsertHistory`・`getHistoryNames`・`HistorySelectDialog`）は 2026-06-29（commit `d9e408e`）で完全に削除された。その際、前日追加されていた本機能（`candidateNames` ベースの候補表示）まで誤って巻き込んで削除されていたため、2026-07-05（commit `c68da52`）に本機能のみを復元した。旧・履歴DB方式は復元対象外であり、今後もこのセクションで説明する `candidateNames` 方式（履歴候補）と、Rev 9.0 で追加した「よく買うもの候補」のみが実装されている。
 
-#### 候補の取得元（`candidateNames`）
+#### 候補の取得元
 
-| 呼び出し元 | candidateNames の内容 |
-|-----------|----------------------|
-| 商品追加・編集ダイアログ（`add_item_dialog.dart`） | `itemProvider` が保持する**現在表示中のリスト内**の商品名一覧（`shopping_list_screen.dart` の `build()` 内で `itemAsync` から算出） |
-| よく買うもの直接登録ダイアログ（`favorites_screen.dart` の `_AddFavoriteDialog`） | `DatabaseHelper.getFavorites()` で取得した**よく買うもの一覧**内の商品名一覧 |
+| 呼び出し元 | 履歴候補（`candidateNames`） | よく買うもの候補（`favoriteSuggestions`） |
+|-----------|----------------------|----------------------|
+| 商品追加ダイアログ・新規追加（`add_item_dialog.dart`） | `itemProvider` が保持する**現在表示中のリスト内**の商品名一覧（`shopping_list_screen.dart` の `build()` 内で `itemAsync` から算出） | `initState` で `DatabaseHelper.getFavorites()` から読み込み、`FavoriteSuggestion` に変換（カテゴリ名は `categoryProvider` から解決） |
+| 商品編集ダイアログ（`add_item_dialog.dart`、`isEdit`） | 同上 | 渡さない（空リスト・`onFavoriteSelected` も `null`） |
+| よく買うもの直接登録ダイアログ（`favorites_screen.dart` の `_AddFavoriteDialog`） | `DatabaseHelper.getFavorites()` で取得した**よく買うもの一覧**内の商品名一覧 | 渡さない |
 
 #### 表示ロジック（`item_name_field.dart`）
 
@@ -466,24 +468,38 @@ TotalSummary(items: items)
 |------|------|
 | フォーカス取得時 | その時点の入力内容で候補を再計算（`_onFocusChange` → `_updateSuggestions`） |
 | 入力文字が空 | 候補非表示 |
-| 入力文字が1文字以上 | `candidateNames` を対象に大文字小文字を区別しない部分一致（`contains`）でフィルタし、先頭から最大8件を `ListTile` で表示 |
+| 入力文字が1文字以上 | `buildNameSuggestions()` が、大文字小文字を区別しない部分一致（`contains`）で絞り込み、**よく買うもの（最大5件）を先頭に、残り枠に履歴（同名重複除去）を並べて合計最大8件**を `ListTile` で表示 |
+| よく買うもの候補の表示 | 先頭に星アイコン（`Icons.star`）、subtitle に `×個数`・`¥価格`（価格が0より大きい場合のみ）・カテゴリ名（存在する場合のみ）を全角スペース区切りで表示 |
 | フォーカス喪失時 | 候補を非表示にクリア |
-| 候補タップ時 | 入力欄にその商品名をセットしてフォーカスを外す |
+| 履歴候補タップ時 | 入力欄にその商品名のみをセットしてフォーカスを外す |
+| よく買うもの候補タップ時 | `onFavoriteSelected` を呼び出してフォーカスを外す（下記） |
+
+#### よく買うもの候補を選択したときの挙動（`add_item_dialog.dart` の `_applyFavorite`）
+
+- 商品名・個数・価格をフォームに入力する。カテゴリは、登録先カテゴリが現存する場合のみ選択状態にする（存在しない場合は未選択）。
+- 「よく買うものに登録」チェックはOFFにする（既にあるよく買うものを選んだため）。
+- この時点では商品は登録されない。内容を確認・修正したうえで「追加」を押して登録する。
+- 連続追加時、よく買うもの由来で選択されたカテゴリのみ、追加後に未選択へリセットする（ユーザーが手動で選んだカテゴリは従来どおり維持）。カテゴリのドロップダウン操作・新規カテゴリ作成を行うと「よく買うもの由来」の扱いは解除される。
 
 ```dart
-void _updateSuggestions(String text) {
-  if (text.isEmpty) {
-    setState(() => _suggestions = []);
-    return;
-  }
-  final filtered = widget.candidateNames
-      .where((n) => n.toLowerCase().contains(text.toLowerCase()))
-      .toList();
-  setState(() => _suggestions = filtered.take(8).toList());
+List<NameSuggestion> buildNameSuggestions({
+  required String text,
+  required List<String> history,
+  List<FavoriteSuggestion> favorites = const [],
+}) {
+  if (text.isEmpty) return [];
+  final lower = text.toLowerCase();
+  bool matches(String n) => n.toLowerCase().contains(lower);
+  final favs = favorites
+      .where((f) => matches(f.name))
+      .take(_maxFavoriteSuggestions) // 5
+      .map((f) => NameSuggestion(f.name, f));
+  final hist = history.where(matches).toSet().map(NameSuggestion.new);
+  return [...favs, ...hist].take(_maxSuggestions).toList(); // 8
 }
 ```
 
-> **注意:** 本機能は UI 層でのみ候補を保持する参考表示であり、DB テーブルは持たない。使用回数・最終使用日時による重み付け（頻度順表示）は行わない。
+> **注意:** 本機能は UI 層でのみ候補を保持する参考表示であり、DB テーブルは持たない（よく買うもの候補は既存の `favorites` テーブルを読み取るのみ）。使用回数・最終使用日時による重み付け（頻度順表示）は行わない。履歴候補とよく買うもの候補が同名の場合も重複除去は履歴同士のみで、両方表示され得る。
 
 ---
 
@@ -978,7 +994,7 @@ if (!mounted) return;
 - Undo 復元対応（単件・複数件）
 - 複数リスト対応（最大10リスト）
 - 商品を別リストへ移動
-- 商品名候補表示（現在のリスト内／よく買うもの内の既存商品名から部分一致・最大8件・DB非永続。頻度順の履歴ベース補完ではない）
+- 商品名候補表示（現在のリスト内／よく買うもの内の既存商品名から部分一致・最大8件・DB非永続。商品追加時はよく買うもの候補〈最大5件・星付き〉も表示し選択で名前・個数・価格・カテゴリを反映。頻度順の履歴ベース補完ではない）
 - よく買うもの登録・一括追加・検索（絞り込み表示）
 - カテゴリ管理（作成・削除）とカテゴリ別セクション表示
 - バックアップ・機種変更引継ぎ（JSONエクスポート/インポート・共有/端末保存）

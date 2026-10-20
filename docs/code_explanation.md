@@ -8,6 +8,7 @@ lib/
 ├── models/
 │   ├── item.dart                      # 商品データモデル
 │   ├── category.dart                  # カテゴリデータモデル
+│   ├── favorite_suggestion.dart       # 予測候補用「よく買うもの」モデル（FavoriteSuggestion）
 │   └── shopping_list.dart             # リストデータモデル（budgetフィールドあり）
 ├── database/
 │   └── database_helper.dart           # SQLite永続化層（items / lists / favorites / categories）
@@ -45,7 +46,7 @@ lib/
 
 状態管理は **Riverpod（AsyncNotifier）**、永続化は **sqflite（SQLite）** を採用しています。加えて、バックアップ・共有機能のためにファイルI/Oを担う `services/` 層、DB・Riverpodに依存しない純粋関数をまとめる `utils/` 層が追加され、UI・状態・データベース・外部ファイルI/O・純粋ロジックの5層構造になっています。「よく買うもの」管理はダイアログ（`widgets/favorites_dialog.dart`）から全画面（`screens/favorites_screen.dart`）へ置き換わっており、`screens/` にはメイン画面と合わせて2ファイルが存在します。
 
-なお本ドキュメントでは、過去に存在した「商品名の入力履歴（`item_history` テーブル・`upsertHistory`・`history_select_dialog.dart`）」には一切触れません。この履歴ベースのオートコンプリート機能は2026-06-29に完全に削除され、現在のコードベースには存在しません。後述する `item_name_field.dart` の候補表示（サジェスト）機能は、履歴DBを参照する別物であり、現在リストに表示されている商品名や「よく買うもの」の登録名（`candidateNames`）を元にした別の仕組みです。
+なお本ドキュメントでは、過去に存在した「商品名の入力履歴（`item_history` テーブル・`upsertHistory`・`history_select_dialog.dart`）」には一切触れません。この履歴ベースのオートコンプリート機能は2026-06-29に完全に削除され、現在のコードベースには存在しません。後述する `item_name_field.dart` の候補表示（サジェスト）機能は、履歴DBを参照する別物であり、現在リストに表示されている商品名（`candidateNames`）と、商品追加ダイアログ限定で「よく買うもの」（`FavoriteSuggestion`）を元にした別の仕組みです。
 
 ---
 
@@ -792,6 +793,30 @@ if (_addToFavorites) {
 
 商品追加と同時に「よく買うもの」へも登録できます。既に同名の「よく買うもの」が存在する場合は確認ダイアログを挟み、無条件の重複登録を避けています。この「重複確認ダイアログ」パターンは `shopping_list_screen.dart` の `_buildCategorySections`（`onAddToFavoritesFor`）にも、チェック済セクションの `onAddToFavorites` コールバックにも、ほぼ同一のコードとして存在します。プロジェクトルールに「`await` を含む非同期処理を修正・追加する際は、同一パターンが複数ファイルに存在しないか確認し、全箇所を同時に修正する」と明記されているのは、まさにこの重複実装を指しています。将来この確認フローの仕様を変更する場合は、最低でもこの3箇所（`add_item_dialog.dart` と `shopping_list_screen.dart` 内の2箇所）を同時に修正する必要があります。
 
+### 予測候補への「よく買うもの」追加（commit `8a9e4bc`）
+
+新規追加時のみ（`item == null`）、`initState` から `_loadFavorites()` が `DatabaseHelper.instance.getFavorites()` を読み込み、`FavoriteSuggestion.fromMap` で変換して `_favorites` に保持します。`build` 内では `isEdit` のとき `favoriteSuggestions: const []`・`onFavoriteSelected: null` を、新規追加のときは `_favorites` に `categoryProvider` から引いたカテゴリ名を `withCategoryName` で付与したリストと `_applyFavorite` を `ItemNameField` に渡します。そのため編集ダイアログには「よく買うもの」候補は出ません。
+
+```dart
+void _applyFavorite(FavoriteSuggestion fav) {
+  final categories = ref.read(categoryProvider).value ?? <Category>[];
+  final categoryId =
+      categories.any((c) => c.id == fav.categoryId) ? fav.categoryId : null;
+  setState(() {
+    _nameCtrl.text = fav.name;
+    _quantityCtrl.text = fav.quantity.toString();
+    _priceCtrl.text = fav.price.toString();
+    _selectedCategoryId = categoryId;
+    _categoryFromFavorite = categoryId != null;
+    _addToFavorites = false;
+  });
+}
+```
+
+星付き候補を選ぶと名前・個数・価格・カテゴリがフォームに入力され、「よく買うものに登録」チェックはOFFになります（既にあるものを選んだため）。この時点では登録されず、確認・修正後に「追加」を押して初めて登録されます。登録先カテゴリが現存しない場合はカテゴリ未選択になります。
+
+`_categoryFromFavorite` は「現在のカテゴリ選択がよく買うもの由来か」を示すフラグです。連続追加時の `_submit` では、このフラグが `true` のときだけ `_selectedCategoryId = null` に戻してフラグも下ろします（ユーザーが手動で選んだカテゴリは従来どおり維持されます）。カテゴリのドロップダウン操作と、インラインでの新規カテゴリ作成でもフラグは `false` に戻り、手動選択として扱われます。
+
 ---
 
 ## 13. `screens/favorites_screen.dart` — よく買うもの管理（ダイアログから全画面へ）
@@ -1121,33 +1146,55 @@ BudgetSummary(
 
 ## 21. `widgets/fields/item_name_field.dart` — 商品名入力と候補表示
 
-**重要な注意：** このWidgetは過去に存在した「入力履歴（`item_history` テーブル）ベースのオートコンプリート」とは別物です。履歴ベースの機能は2026-06-29に完全に削除されており、現在の `ItemNameField` は呼び出し元から渡された `candidateNames`（現在のリスト内の商品名、または「よく買うもの」の登録名）を候補として表示するだけの、DBに依存しないシンプルな実装です。
+**重要な注意：** このWidgetは過去に存在した「入力履歴（`item_history` テーブル）ベースのオートコンプリート」とは別物です。履歴ベースの機能は2026-06-29に完全に削除されており、現在の `ItemNameField` は呼び出し元から渡された `candidateNames`（現在のリスト内の商品名、または「よく買うもの」の登録名）と、商品追加ダイアログから渡される `favoriteSuggestions`（「よく買うもの」の詳細つき候補）を表示するだけの、DBに依存しないシンプルな実装です。
+
+候補の組み立ては、トップレベルの純粋関数 `buildNameSuggestions` に切り出されています。
 
 ```dart
-void _updateSuggestions(String text) {
-  // 空欄（フォーカス取得直後・連続追加でのクリア直後）では候補を出さない。
-  // 入力文字がある場合のみ履歴を絞り込んで表示する。
-  if (text.isEmpty) {
-    setState(() => _suggestions = []);
-    return;
-  }
-  final filtered = widget.candidateNames
-      .where((n) => n.toLowerCase().contains(text.toLowerCase()))
-      .toList();
-  setState(() => _suggestions = filtered.take(8).toList());
+const int _maxSuggestions = 8;
+const int _maxFavoriteSuggestions = 5;
+
+class NameSuggestion {
+  final String name;
+  final FavoriteSuggestion? favorite;
+  const NameSuggestion(this.name, [this.favorite]);
+}
+
+// よく買うもの（最大5件）を先に、残り枠に履歴（同名重複除去）を合計8件まで並べる。
+List<NameSuggestion> buildNameSuggestions({
+  required String text,
+  required List<String> history,
+  List<FavoriteSuggestion> favorites = const [],
+}) {
+  if (text.isEmpty) return [];
+  final lower = text.toLowerCase();
+  bool matches(String n) => n.toLowerCase().contains(lower);
+  final favs = favorites
+      .where((f) => matches(f.name))
+      .take(_maxFavoriteSuggestions)
+      .map((f) => NameSuggestion(f.name, f));
+  final hist = history.where(matches).toSet().map(NameSuggestion.new);
+  return [...favs, ...hist].take(_maxSuggestions).toList();
 }
 ```
 
-**空文字時は候補を表示しない** のが仕様上の要点です。前バージョン（履歴ベース時代）は空文字フォーカス時に全履歴を表示していましたが、`add_item_dialog.dart` の連続追加フロー（追加後に入力欄をクリアして即座に再フォーカスする）と組み合わせると、クリア直後に大量の候補リストが価格・数量欄の上に覆いかぶさってしまう問題がありました。プロジェクトルールに明記された「連続入力UIで入力欄をクリアして再フォーカスする設計では、サジェスト/オートコンプリートは『空文字時は非表示・入力時のみ表示』を既定とする」という知見がこの実装に反映されています。
+`_updateSuggestions` はこの関数を呼んで `_suggestions`（`List<NameSuggestion>`）を更新するだけです。表示は `ListTile` で、`favorite` を持つ候補には先頭に星アイコン（`Icons.star`）と、`FavoriteSuggestion.subtitle` によるsubtitleが付きます。候補をタップすると `_selectSuggestion` が走り、`favorite` があり、かつ `onFavoriteSelected` が渡されていればそのコールバックを呼び（名前・個数・価格・カテゴリの反映は呼び出し側 `add_item_dialog.dart` が行います）、そうでなければ名前だけを `controller.text` にセットします。いずれの場合もその後フォーカスを外します。
 
-`candidateNames` は呼び出し元ごとに異なるデータソースが渡されます。
+**空文字時は候補を表示しない** のが仕様上の要点です。前バージョン（履歴ベース時代）は空文字フォーカス時に全履歴を表示していましたが、`add_item_dialog.dart` の連続追加フロー（追加後に入力欄をクリアして即座に再フォーカスする）と組み合わせると、クリア直後に大量の候補リストが価格・数量欄の上に覆いかぶさってしまう問題がありました。プロジェクトルールに明記された「連続入力UIで入力欄をクリアして再フォーカスする設計では、サジェスト/オートコンプリートは『空文字時は非表示・入力時のみ表示』を既定とする」という知見がこの実装に反映されています（`buildNameSuggestions` の先頭 `if (text.isEmpty) return [];`）。
 
-| 呼び出し元 | `candidateNames` の中身 |
-|---|---|
-| `shopping_list_screen.dart` → `showAddItemDialog` | 現在表示中のリストに含まれる商品名（`itemAsync` から `map((i) => i.name)`） |
-| `screens/favorites_screen.dart` の `_AddFavoriteDialog` | 既存の「よく買うもの」の登録名一覧 |
+`candidateNames` と `favoriteSuggestions` は呼び出し元ごとに異なるデータソースが渡されます。
+
+| 呼び出し元 | `candidateNames`（履歴候補）の中身 | `favoriteSuggestions`（よく買うもの候補） |
+|---|---|---|
+| `shopping_list_screen.dart` → `showAddItemDialog`（新規追加） | 現在表示中のリストに含まれる商品名（`itemAsync` から `map((i) => i.name)`） | `getFavorites()` の結果を `FavoriteSuggestion` に変換したもの（カテゴリ名つき）、選択時は `_applyFavorite` |
+| `shopping_list_screen.dart` → `showAddItemDialog`（編集） | 同上 | 渡さない（`const []`、`onFavoriteSelected` は `null`） |
+| `screens/favorites_screen.dart` の `_AddFavoriteDialog` | 既存の「よく買うもの」の登録名一覧 | 渡さない（デフォルトの空リスト） |
 
 このように候補の母集団は「今使っている画面の文脈」に応じて切り替わりますが、`ItemNameField` 自体は候補の出所を意識しない汎用コンポーネントとして設計されています。
+
+### 補足：`models/favorite_suggestion.dart` — `FavoriteSuggestion`（新規モデル）
+
+予測候補に表示する「よく買うもの」1件を表す不変クラスで、`name`・`price`・`quantity`・`categoryId`・`categoryName` を持ちます。`fromMap` は `getFavorites()` の行から生成し、`price` は `null` なら `0`、`quantity` は `null` なら `1`、`categoryId` は `null` を許容して、数値は `(num).toInt()` でキャストします（外部由来の数値を `as int` で受けないプロジェクトルールに沿っています）。`categoryName` はDBの行には含まれないため、`withCategoryName` で呼び出し側が後から付与します。`subtitle` ゲッターは `×個数`・`¥価格`（価格が0より大きい場合のみ）・カテゴリ名（`null` でない場合のみ）を全角スペースで連結した文字列を返します（例：`×2　¥198　乳製品`）。
 
 ---
 
@@ -1230,7 +1277,7 @@ FilledButton.icon(
 
 ## 26. `widgets/help_dialog.dart` — 使い方ダイアログ
 
-新機能追加のたびに `_HelpItem` を追加・更新する運用ルールがあり（プロジェクトルール「機能を追加・変更・削除したときは必ず `lib/widgets/help_dialog.dart` を同時に更新する」）、現在は以下の項目が並んでいます：商品の追加（連続入力対応）・編集・削除・チェック済みを一括削除・並び替え・リスト名変更・リストの予算を設定・リスト追加・リスト削除・別リストへ移動、商品名の候補表示、リストの複製、よく買うものからの追加、テキストで共有、リストを共有（読み込み用）、バックアップ、読み込み（バックアップ／共有リスト）、カテゴリを管理、広告を非表示にする。
+新機能追加のたびに `_HelpItem` を追加・更新する運用ルールがあり（プロジェクトルール「機能を追加・変更・削除したときは必ず `lib/widgets/help_dialog.dart` を同時に更新する」）、現在は以下の項目が並んでいます：商品の追加（連続入力対応）・編集・削除・チェック済みを一括削除・並び替え・リスト名変更・リストの予算を設定・リスト追加・リスト削除・別リストへ移動、商品名の候補表示（現在のリスト内の商品名に加え、商品追加時は「よく買うもの」も星つきで表示）、リストの複製、よく買うものからの追加、テキストで共有、リストを共有（読み込み用）、バックアップ、読み込み（バックアップ／共有リスト）、カテゴリを管理、広告を非表示にする。
 
 過去に存在した「履歴から登録」（`history_select_dialog.dart` に対応する項目）は、機能自体の削除に伴い `_HelpItem` からも取り除かれています。
 

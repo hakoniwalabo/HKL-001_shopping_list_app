@@ -71,7 +71,7 @@ class HelpDialog extends StatelessWidget {
             _HelpItem(
               icon: Icons.search,
               label: '商品名の候補表示',
-              description: '商品名入力中、現在のリスト内にある商品名が候補として表示されます（参考表示のみ）',
+              description: '商品名入力中、現在のリスト内にある商品名と「よく買うもの」が候補として表示されます（最大8件）\n星マークの候補は「よく買うもの」で、選ぶと名前・個数・価格・カテゴリがまとめて入力されます（確認・修正して「追加」）\n星なしの候補は名前のみ入力されます（商品の追加時のみ。編集時は「よく買うもの」は表示されません）',
             ),
             _HelpItem(
               icon: Icons.copy_outlined,
