@@ -2,7 +2,7 @@
 
 **作成日：2026-08-01**
 **対象バージョン：** spec rev9.0 の次リビジョン（rev9.1想定）に追加
-**ステータス：実装済み**（2026-10-21、spec rev9.1 に反映済み）。設計承認後、2026-10-21 に版数・行番号のみ補正（設計内容は変更なし）。ヘルプ文言のアイコン表記のみ ⇅→≡ に補正。実装時に §3.1.3 の `ListReorderBar` を `SizedBox(height: preferredSize.height)` で包む補正を反映（`AppBar.bottom` は高さ無制約のため）。
+**ステータス：実装済み**（2026-10-21、spec rev9.1 に反映済み）。設計承認後、2026-10-21 に版数・行番号のみ補正（設計内容は変更なし）。ヘルプ文言のアイコン表記のみ ⇅→≡ に補正。実装時に §3.1.3 の `ListReorderBar` を `SizedBox(height: preferredSize.height)` で包む補正を反映（`AppBar.bottom` は高さ無制約のため）。マイグレーションは `db.transaction` ではなく `db.batch()` に補正（実装時のレビュー指摘）。
 
 ---
 
@@ -330,20 +330,21 @@ if (oldVersion < 9) {
   }
 
   final existingRows = await db.query('lists', orderBy: 'createdAt ASC');
-  await db.transaction((txn) async {
-    final batch = txn.batch();
-    for (int i = 0; i < existingRows.length; i++) {
-      batch.update(
-        'lists',
-        {'sortOrder': i},
-        where: 'id = ?',
-        whereArgs: [existingRows[i]['id']],
-      );
-    }
-    await batch.commit(noResult: true);
-  });
+  // onUpgrade は sqflite が既にトランザクション内で実行するため db.transaction をネストしない（ネストすると固まるリスクがある）
+  final batch = db.batch();
+  for (int i = 0; i < existingRows.length; i++) {
+    batch.update(
+      'lists',
+      {'sortOrder': i},
+      where: 'id = ?',
+      whereArgs: [existingRows[i]['id']],
+    );
+  }
+  await batch.commit(noResult: true);
 }
 ```
+
+上記の注記のとおり、`onUpgrade` 内では `db.transaction` を使わず、`db.batch()` で一括更新する（実装も同じ形）。
 
 #### 3.2.2 `ShoppingList` モデル（`lib/models/shopping_list.dart`）
 
