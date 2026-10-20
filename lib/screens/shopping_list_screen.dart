@@ -17,6 +17,7 @@ import '../widgets/ad_banner.dart';
 import '../widgets/add_item_dialog.dart';
 import '../widgets/empty_state_view.dart';
 import '../widgets/list_management_buttons.dart';
+import '../widgets/list_reorder_bar.dart';
 import '../widgets/list_section.dart';
 import '../widgets/list_tab_bar.dart';
 import 'favorites_screen.dart';
@@ -44,6 +45,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
 
   int currentListId = -1;
   bool _isChangingTab = false;
+  bool _isReorderMode = false;
   final numberFormat = NumberFormat('#,###');
 
   @override
@@ -441,6 +443,40 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
     );
   }
 
+  void _toggleReorderMode() {
+    setState(() {
+      _isReorderMode = !_isReorderMode;
+    });
+
+    // 並び替えモードを終了する際、TabController のインデックスが
+    // currentListId の新しい位置とズレていないか確認し、必要なら同期する。
+    if (!_isReorderMode && _tabController != null) {
+      final index = shoppingLists.indexWhere((e) => e.id == currentListId);
+      if (index != -1 && index != _tabController!.index) {
+        _tabController!.animateTo(index);
+      }
+    }
+  }
+
+  Future<void> _onReorderList(int oldIndex, int newIndex) async {
+    final reordered = [...shoppingLists];
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, moved);
+
+    // 楽観的更新（items の並び替えと同一パターン）
+    setState(() => shoppingLists = reordered);
+
+    try {
+      await DatabaseHelper.instance.updateListOrder(reordered);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('並び替えの保存に失敗しました')),
+      );
+      await loadLists();
+    }
+  }
+
   Future<void> _showRenameListDialog(ShoppingList list) async {
     await showDialog<void>(
       context: context,
@@ -795,6 +831,8 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           ListManagementButtons(
             onAddList: _showAddListDialog,
             onDuplicateList: _duplicateCurrentList,
+            onToggleReorderMode: _toggleReorderMode,
+            isReorderMode: _isReorderMode,
           ),
           IconButton(
             icon: const Icon(Icons.favorite_border),
@@ -918,11 +956,16 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen>
           ),
         ],
 
-        bottom: ListTabBar(
-          shoppingLists: shoppingLists,
-          tabController: _tabController,
-          onRenameTab: _showRenameListDialog,
-        ),
+        bottom: _isReorderMode
+            ? ListReorderBar(
+                shoppingLists: shoppingLists,
+                onReorder: _onReorderList,
+              )
+            : ListTabBar(
+                shoppingLists: shoppingLists,
+                tabController: _tabController,
+                onRenameTab: _showRenameListDialog,
+              ),
       ),
       body: itemAsync.when(
         data: (items) {
