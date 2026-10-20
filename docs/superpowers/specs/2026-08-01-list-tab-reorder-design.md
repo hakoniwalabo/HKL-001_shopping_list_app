@@ -1,8 +1,8 @@
 # リスト（タブ）並び替え機能 設計書
 
 **作成日：2026-08-01**
-**対象バージョン：** spec rev8.14 の次リビジョン（rev8.15想定）に追加
-**ステータス：設計承認済み・未実装**（マスターの指示により、実装計画（writing-plans）の作成はまだ行っていない。実装に進む際は改めて指示を受けること）
+**対象バージョン：** spec rev9.0 の次リビジョン（rev9.1想定）に追加
+**ステータス：設計承認済み・未実装**（マスターの指示により、実装計画（writing-plans）の作成はまだ行っていない。実装に進む際は改めて指示を受けること）。2026-10-21 に版数・行番号のみ補正（設計内容は変更なし）。
 
 ---
 
@@ -202,7 +202,7 @@ class ListReorderBar extends StatelessWidget implements PreferredSizeWidget {
 bool _isReorderMode = false;
 ```
 
-**AppBar 構成の変更（`actions`：794〜798行目付近、`bottom`：921〜925行目付近）：**
+**AppBar 構成の変更（`actions`：795〜798行目付近、`bottom`：921〜925行目付近）：**
 
 ```dart
 actions: [
@@ -497,7 +497,7 @@ Future<int> duplicateList(int sourceListId, String newName) async {
 }
 ```
 
-**`importData()`（561〜710行目）内の `lists` INSERT（629〜651行目付近）：** 既存の確定ルール「インポート処理でバックアップのメタデータ（`createdAt` 等）を流用せず、現在のDB最大値+連番を設定する」を `sortOrder` にも適用する。`createdAt` について既に行っている「既存リスト中の最大値+連番」と同じ考え方で、`sortOrder` も現在のDB最大値+連番を採番する。これにより、インポートされたリストの並び順がバックアップ時の `sortOrder` 値に引きずられて既存リストと衝突する（同じ `sortOrder` を持つ行が複数できる）事態を防ぐ。なお `budget` は先行して実装された予算表示機能により既に `(list['budget'] as num?)?.toInt() ?? 0` として採用済みであり、この扱いは変更しない。
+**`importData()`（561〜722行目）内の `lists` INSERT（629〜651行目付近）：** 既存の確定ルール「インポート処理でバックアップのメタデータ（`createdAt` 等）を流用せず、現在のDB最大値+連番を設定する」を `sortOrder` にも適用する。`createdAt` について既に行っている「既存リスト中の最大値+連番」と同じ考え方で、`sortOrder` も現在のDB最大値+連番を採番する。これにより、インポートされたリストの並び順がバックアップ時の `sortOrder` 値に引きずられて既存リストと衝突する（同じ `sortOrder` を持つ行が複数できる）事態を防ぐ。なお `budget` は先行して実装された予算表示機能により既に `(list['budget'] as num?)?.toInt() ?? 0` として採用済みであり、この扱いは変更しない。
 
 ```dart
 // lists INSERT
@@ -586,11 +586,11 @@ for (final list in incomingLists) {
   ),
   ```
 
-- **生きた設計書の更新：** `docs/spec_HKL-001_shopping_list_app_rev8.14.md` を rev8.15 へ更新する。`updating-rev-numbered-specs` スキルの手順に従い、以下を同一コミットで行う。
-  1. 現行の `docs/spec_HKL-001_shopping_list_app_rev8.14.md` を `docs/_old/spec_HKL-001_shopping_list_app_rev8.14.md` へコピーして保存する
-  2. 本文（変更履歴テーブルへの追記、冒頭「Rev 8.14」→「Rev 8.15」表記の更新、システム構成図・DBスキーマ節等の該当箇所の更新）を編集する
-  3. `git mv docs/spec_HKL-001_shopping_list_app_rev8.14.md docs/spec_HKL-001_shopping_list_app_rev8.15.md` でファイル名をリネームする（内容編集と同一コミットに含める）
-  4. リネーム後、ファイル内に「rev8.14」「Rev 8.14」等、古いリビジョンへの自己言及が残っていないか grep で確認する
+- **生きた設計書の更新：** `docs/spec_HKL-001_shopping_list_app_rev9.0.md` を rev9.1 へ更新する。`updating-rev-numbered-specs` スキルの手順に従い、以下を同一コミットで行う。
+  1. 現行の `docs/spec_HKL-001_shopping_list_app_rev9.0.md` を `docs/_old/spec_HKL-001_shopping_list_app_rev9.0.md` へコピーして保存する
+  2. 本文（変更履歴テーブルへの追記、冒頭「Rev 9.0」→「Rev 9.1」表記の更新、システム構成図・DBスキーマ節等の該当箇所の更新）を編集する
+  3. `git mv docs/spec_HKL-001_shopping_list_app_rev9.0.md docs/spec_HKL-001_shopping_list_app_rev9.1.md` でファイル名をリネームする（内容編集と同一コミットに含める）
+  4. リネーム後、ファイル内に「rev9.0」「Rev 9.0」等、古いリビジョンへの自己言及が残っていないか grep で確認する
 
 - **インポート処理の確定ルール順守：** `importData()` での `lists` 復元時、`sortOrder` をバックアップのメタデータから流用せず、現在のDB最大値+連番で設定する（§3.2.3参照）。既存の `createdAt` に対する扱いと同じ考え方である。
 
@@ -637,5 +637,5 @@ for (final list in incomingLists) {
 | `lib/widgets/list_tab_bar.dart` | 変更なし |
 | `lib/screens/shopping_list_screen.dart` | `_isReorderMode` State追加、`_toggleReorderMode()`／`_onReorderList()` 追加、AppBar構成の分岐追加 |
 | `lib/widgets/help_dialog.dart` | 「リストの並び替え」操作説明を追加 |
-| `docs/spec_HKL-001_shopping_list_app_rev8.14.md` | rev8.15へ更新・リネーム（`docs/spec_HKL-001_shopping_list_app_rev8.15.md`）、旧版を `docs/_old/` へ保存 |
+| `docs/spec_HKL-001_shopping_list_app_rev9.0.md` | rev9.1へ更新・リネーム（`docs/spec_HKL-001_shopping_list_app_rev9.1.md`）、旧版を `docs/_old/` へ保存 |
 | `test/shopping_list_test.dart` | 新規追加（`ShoppingList` モデルの単体テスト） |
