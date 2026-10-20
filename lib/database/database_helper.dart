@@ -331,7 +331,7 @@ CREATE TABLE IF NOT EXISTS categories (
   Future<List<ShoppingList>> getLists() async {
     final db = await database;
 
-    final result = await db.query('lists', orderBy: 'createdAt ASC');
+    final result = await db.query('lists', orderBy: 'sortOrder ASC');
 
     return result.map((e) => ShoppingList.fromMap(e)).toList();
   }
@@ -339,7 +339,17 @@ CREATE TABLE IF NOT EXISTS categories (
   Future<int> insertList(ShoppingList list) async {
     final db = await database;
 
-    return await db.insert('lists', list.toMap());
+    // 呼び出し元の sortOrder は使わず、末尾になるよう採番し直す
+    final result = await db.rawQuery(
+      'SELECT MAX(sortOrder) as maxOrder FROM lists',
+    );
+    final maxOrder = (result.first['maxOrder'] as int?) ?? -1;
+
+    final map = list.toMap()
+      ..remove('id')
+      ..['sortOrder'] = maxOrder + 1;
+
+    return await db.insert('lists', map);
   }
 
   Future<void> deleteList(int listId) async {
@@ -384,15 +394,41 @@ CREATE TABLE IF NOT EXISTS categories (
     );
   }
 
+  /// リストの並び順を確定する（lists の並びどおりに sortOrder を 0,1,2,… で更新）
+  Future<void> updateListOrder(List<ShoppingList> lists) async {
+    final db = await database;
+
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+
+      for (int i = 0; i < lists.length; i++) {
+        batch.update(
+          'lists',
+          {'sortOrder': i},
+          where: 'id = ?',
+          whereArgs: [lists[i].id],
+        );
+      }
+
+      await batch.commit(noResult: true);
+    });
+  }
+
   /// 指定リストを複製して新しいリストIDを返す
   Future<int> duplicateList(int sourceListId, String newName) async {
     final db = await database;
 
     return await db.transaction((txn) async {
-      // 新しいリストを作成
+      // 新しいリストを末尾に作成
+      final maxOrderResult = await txn.rawQuery(
+        'SELECT MAX(sortOrder) as maxOrder FROM lists',
+      );
+      final maxOrder = (maxOrderResult.first['maxOrder'] as int?) ?? -1;
+
       final newListId = await txn.insert('lists', {
         'name': newName,
         'createdAt': DateTime.now().millisecondsSinceEpoch,
+        'sortOrder': maxOrder + 1,
       });
 
       // 元リストのアイテムを取得してコピー
@@ -662,6 +698,13 @@ CREATE TABLE IF NOT EXISTS categories (
           ((maxCreatedAtResult.first['maxAt'] as int?) ?? DateTime.now().millisecondsSinceEpoch) + 1;
       int listInsertIndex = 0;
 
+      // sortOrder はバックアップの値を流用せず、現在のDB最大値+連番で採番する
+      final maxListOrderResult = await txn.rawQuery(
+        'SELECT MAX(sortOrder) as maxOrder FROM lists',
+      );
+      int nextListSortOrder =
+          ((maxListOrderResult.first['maxOrder'] as int?) ?? -1) + 1;
+
       for (final list in incomingLists) {
         final oldId = (list['id'] as num).toInt();
         final resolvedName =
@@ -672,6 +715,7 @@ CREATE TABLE IF NOT EXISTS categories (
           'name': resolvedName,
           'createdAt': baseCreatedAt + listInsertIndex,
           'budget': (list['budget'] as num?)?.toInt() ?? 0,
+          'sortOrder': nextListSortOrder++,
         });
         listInsertIndex++;
         listIdMap[oldId] = newId;
