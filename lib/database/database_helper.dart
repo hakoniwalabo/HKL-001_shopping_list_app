@@ -742,7 +742,8 @@ CREATE TABLE IF NOT EXISTS categories (
           ..remove('id')
           ..['listId'] = newListId
           ..['categoryId'] = newCategoryId
-          ..['quantity'] = quantity;
+          ..['quantity'] = quantity
+          ..['price'] = normalizeImportedPrice(item['price']);
         await txn.insert('items', copy);
       }
 
@@ -777,7 +778,8 @@ CREATE TABLE IF NOT EXISTS categories (
           ..remove('id')
           ..['sortOrder'] = nextOrder++
           ..['categoryId'] = newCategoryId
-          ..['quantity'] = quantity;
+          ..['quantity'] = quantity
+          ..['price'] = normalizeImportedPrice(fav['price']);
         await txn.insert('favorites', copy);
         insertedFavCount++;
       }
@@ -789,6 +791,14 @@ CREATE TABLE IF NOT EXISTS categories (
       favoriteCount: insertedFavCount,
       firstNewListId: listIdMap.isNotEmpty ? listIdMap.values.first : null,
     );
+  }
+
+  /// インポートした価格を0以上の整数に正規化する。
+  /// 数値以外・負数は0、小数は切り捨てる。
+  static int normalizeImportedPrice(Object? raw) {
+    if (raw is! num || raw.isNaN || raw.isInfinite) return 0;
+    final value = raw.toInt();
+    return value < 0 ? 0 : value;
   }
 
   /// リスト名の衝突を解決して一意な名前を返す。

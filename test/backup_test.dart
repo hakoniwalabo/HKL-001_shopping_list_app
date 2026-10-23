@@ -24,6 +24,39 @@ void main() {
     });
   });
 
+  group('DatabaseHelper.normalizeImportedPrice', () {
+    test('正の整数はそのまま返す', () {
+      expect(DatabaseHelper.normalizeImportedPrice(150), 150);
+    });
+
+    test('0は0を返す', () {
+      expect(DatabaseHelper.normalizeImportedPrice(0), 0);
+    });
+
+    test('負数は0にする', () {
+      expect(DatabaseHelper.normalizeImportedPrice(-100), 0);
+    });
+
+    test('nullは0にする', () {
+      expect(DatabaseHelper.normalizeImportedPrice(null), 0);
+    });
+
+    test('文字列は0にする', () {
+      expect(DatabaseHelper.normalizeImportedPrice('abc'), 0);
+      expect(DatabaseHelper.normalizeImportedPrice('100'), 0);
+    });
+
+    test('小数は切り捨てる', () {
+      expect(DatabaseHelper.normalizeImportedPrice(99.9), 99);
+      expect(DatabaseHelper.normalizeImportedPrice(100.0), 100);
+    });
+
+    test('NaN・無限大は0にする', () {
+      expect(DatabaseHelper.normalizeImportedPrice(double.nan), 0);
+      expect(DatabaseHelper.normalizeImportedPrice(double.infinity), 0);
+    });
+  });
+
   group('BackupService.parseAndValidate', () {
     test('正常なJSONをパースして返す', () {
       const json =
