@@ -120,6 +120,11 @@ class HelpDialog extends StatelessWidget {
               label: '広告を非表示にする',
               description: 'AppBar右上の「⋮」→「広告を削除」から買い切り購入',
             ),
+            _HelpItem(
+              icon: Icons.gavel_outlined,
+              label: '利用規約への同意',
+              description: '初回起動時（利用規約の改定時を含む）に、利用規約とプライバシーポリシーへの同意確認が表示されます\n「同意しない」を選ぶとアプリは終了します',
+            ),
           ],
         ),
       ),

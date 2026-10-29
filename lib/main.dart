@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'screens/shopping_list_screen.dart';
+import 'widgets/terms_consent_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,7 +37,7 @@ class MyApp extends StatelessWidget {
 
       themeMode: ThemeMode.system,
 
-      home: const ShoppingListScreen(),
+      home: const TermsConsentGate(child: ShoppingListScreen()),
     );
   }
 }
