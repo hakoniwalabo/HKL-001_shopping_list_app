@@ -119,7 +119,7 @@ DBファイル名 `'shopping.db'`、スキーマバージョン `9`(`openDatabas
 | `sortOrder` | `INTEGER` | `NOT NULL DEFAULT 0` | `int`(`Category.sortOrder`) | 並び順 | lib/database/database_helper.dart |
 | `createdAt` | `INTEGER` | `NOT NULL` | `int`(`Category.createdAt`) | 作成日時 | lib/database/database_helper.dart |
 
-補足として、`_onUpgrade` 経由の移行では一部列の制約が `_createDB` と異なります(例: `items.quantity` は `INTEGER DEFAULT 1`、`items.listId` は `INTEGER DEFAULT 1` で追加)。
+補足として、`items.quantity` と `items.listId` は、`_createDB` でも `_onUpgrade` 経由でも最終的に `DEFAULT` なしの `INTEGER` です。`_onUpgrade` 冒頭の `ALTER TABLE items ADD COLUMN quantity INTEGER DEFAULT 1` と `listId INTEGER DEFAULT 1` は、`oldVersion < 5` の場合にその直後のテーブル再作成(`items_new`)で `DEFAULT` が失われます。`oldVersion >= 5` の場合は、列が既に存在するため ALTER 文は例外で無視されます。`quantity` の値は、インポート処理(`lib/database/database_helper.dart` の 736〜745 行付近)の正規化で 1 以上に担保されます。
 
 ### 3.5 DatabaseHelper / ImportResult のフィールド
 
