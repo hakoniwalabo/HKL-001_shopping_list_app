@@ -23,7 +23,9 @@ lib/
 │   └── favorites_screen.dart          # よく買うもの管理（全画面）
 ├── utils/
 │   ├── favorites_section_helper.dart  # よく買うものカテゴリ別セクション生成（純粋関数）
-│   └── purchase_resolution.dart       # 広告なし状態の判定ロジック（純粋関数）
+│   ├── legal_urls.dart                # 利用規約・プライバシーポリシーのURLと規約バージョン定数
+│   ├── purchase_resolution.dart       # 広告なし状態の判定ロジック（純粋関数）
+│   └── terms_consent.dart             # 利用規約への（再）同意が必要かの判定（純粋関数）
 └── widgets/
     ├── add_item_dialog.dart           # 商品追加・編集ダイアログ（連続追加対応）
     ├── ad_banner.dart                 # バナー広告
@@ -36,6 +38,7 @@ lib/
     ├── list_reorder_bar.dart          # 並び替えモード用の水平並び替えバー
     ├── list_section.dart              # カテゴリ別／未チェック・チェック済セクション
     ├── list_tab_bar.dart              # タブバー
+    ├── terms_consent_gate.dart        # 起動時の利用規約同意確認ゲート（TermsConsentGate）
     ├── total_summary.dart             # 合計金額表示
     ├── upgrade_dialog.dart            # 課金ダイアログ
     └── fields/
@@ -46,6 +49,8 @@ lib/
 ```
 
 状態管理は **Riverpod（AsyncNotifier）**、永続化は **sqflite（SQLite）** を採用しています。加えて、バックアップ・共有機能のためにファイルI/Oを担う `services/` 層、DB・Riverpodに依存しない純粋関数をまとめる `utils/` 層が追加され、UI・状態・データベース・外部ファイルI/O・純粋ロジックの5層構造になっています。「よく買うもの」管理はダイアログ（`widgets/favorites_dialog.dart`）から全画面（`screens/favorites_screen.dart`）へ置き換わっており、`screens/` にはメイン画面と合わせて2ファイルが存在します。
+
+外部パッケージとしては、利用規約・プライバシーポリシーのページを外部ブラウザで開くために `url_launcher`（`^6.3.3`）が追加されています。また、起動時の利用規約同意確認（`widgets/terms_consent_gate.dart`）が加わり、同意済みバージョンの保存には既存の `shared_preferences` を使います（詳細は §28）。
 
 なお本ドキュメントでは、過去に存在した「商品名の入力履歴（`item_history` テーブル・`upsertHistory`・`history_select_dialog.dart`）」には一切触れません。この履歴ベースのオートコンプリート機能は2026-06-29に完全に削除され、現在のコードベースには存在しません。後述する `item_name_field.dart` の候補表示（サジェスト）機能は、履歴DBを参照する別物であり、現在リストに表示されている商品名（`candidateNames`）と、商品追加ダイアログ限定で「よく買うもの」（`FavoriteSuggestion`）を元にした別の仕組みです。
 
@@ -67,6 +72,12 @@ void main() async {
 `ProviderScope` はRiverpodの必須ラッパーで、アプリ全体のプロバイダーストアを保持します。これを `MyApp` より外側に置くことで、すべてのWidgetからプロバイダーへアクセスできます。
 
 `MyApp` ではテーマを `deepPurple` × `useMaterial3: true` で設定し、`themeMode: ThemeMode.system` によりOSのダーク/ライト設定に自動追従します。この部分は前バージョンから変更ありません。
+
+```dart
+home: const TermsConsentGate(child: ShoppingListScreen()),
+```
+
+`home` は以前は `ShoppingListScreen()` を直接指定していましたが、現在は `TermsConsentGate` で包んでいます。`TermsConsentGate` は `child` をそのまま画面として返すラッパーなので見た目や画面構成は変わらず、初回描画後に利用規約への同意状況を確認し、未同意の場合だけ同意ダイアログを重ねて表示します（詳細は §28）。
 
 ---
 
@@ -420,6 +431,18 @@ for (final list in incomingLists) {
 ```
 
 インポートしたリストは、インポート順のまま既存リストの末尾（一番右）に並びます。
+
+**`price` を `normalizeImportedPrice` で正規化する。**
+
+```dart
+static int normalizeImportedPrice(Object? raw) {
+  if (raw is! num || raw.isNaN || raw.isInfinite) return 0;
+  final value = raw.toInt();
+  return value < 0 ? 0 : value;
+}
+```
+
+`items` と `favorites` を挿入する際、`price` はバックアップJSONの値をそのまま使わず、この `static` メソッドを通して0以上の整数にそろえます。`num` 以外（文字列・`null` など）、`NaN`、`Infinity`、負数はすべて `0` になり、小数は `toInt()` により切り捨てられます。外部ファイル由来の値が壊れていても、不正な価格がDBに入らないようにするための防御です。DBやRiverpodに依存しない純粋関数なので、`test/backup_test.dart` で単体テストされています。
 
 ---
 
@@ -1471,9 +1494,86 @@ FilledButton.icon(
 
 ## 27. `widgets/help_dialog.dart` — 使い方ダイアログ
 
-新機能追加のたびに `_HelpItem` を追加・更新する運用ルールがあり（プロジェクトルール「機能を追加・変更・削除したときは必ず `lib/widgets/help_dialog.dart` を同時に更新する」）、現在は以下の項目が並んでいます：商品の追加（連続入力対応）・編集・削除・チェック済みを一括削除・並び替え・リスト名変更・リストの予算を設定・リスト追加・リスト削除・別リストへ移動、商品名の候補表示（現在のリスト内の商品名に加え、商品追加時は「よく買うもの」も星つきで表示）、リストの複製、よく買うものからの追加、テキストで共有、リストを共有（読み込み用）、バックアップ、読み込み（バックアップ／共有リスト）、カテゴリを管理、広告を非表示にする。
+新機能追加のたびに `_HelpItem` を追加・更新する運用ルールがあり（プロジェクトルール「機能を追加・変更・削除したときは必ず `lib/widgets/help_dialog.dart` を同時に更新する」）、現在は以下の項目が並んでいます：商品の追加（連続入力対応）・編集・削除・チェック済みを一括削除・並び替え・リスト名変更・リストの予算を設定・リスト追加・リスト削除・別リストへ移動、商品名の候補表示（現在のリスト内の商品名に加え、商品追加時は「よく買うもの」も星つきで表示）、リストの複製、よく買うものからの追加、テキストで共有、リストを共有（読み込み用）、バックアップ、読み込み（バックアップ／共有リスト）、カテゴリを管理、広告を非表示にする、利用規約への同意（`Icons.gavel_outlined`。初回起動時と利用規約の改定時に同意確認が表示されること、「同意しない」を選ぶとアプリが終了することを説明）。
 
 過去に存在した「履歴から登録」（`history_select_dialog.dart` に対応する項目）は、機能自体の削除に伴い `_HelpItem` からも取り除かれています。
+
+---
+
+## 28. `widgets/terms_consent_gate.dart` と `utils/legal_urls.dart`・`utils/terms_consent.dart` — 利用規約の同意確認（新規）
+
+起動時に利用規約とプライバシーポリシーへの同意を確認する仕組みです。`main.dart` の `home` を `TermsConsentGate(child: ShoppingListScreen())` で包む形で組み込まれています。
+
+### `utils/legal_urls.dart` — URLとバージョン定数
+
+```dart
+const String kTermsOfServiceUrl = 'https://hakoniwalabo.github.io/shopping_list_app/terms_of_service.html';
+const String kPrivacyPolicyUrl = 'https://hakoniwalabo.github.io/privacy_policy.html';
+const int kTermsVersion = 1;
+const String kAcceptedTermsVersionKey = 'accepted_terms_version';
+```
+
+利用規約・プライバシーポリシーのURL、現在の規約バージョン `kTermsVersion`、同意済みバージョンを保存する `SharedPreferences` のキー名をまとめた定数ファイルです。規約を改定して再同意が必要になったときは `kTermsVersion` の値を上げます。保存済みの値より大きくなるため、次回起動時に既存ユーザーにも同意ダイアログが再表示されます。
+
+### `utils/terms_consent.dart` — 再同意が必要かの判定（純粋関数）
+
+```dart
+bool needsTermsConsent(int? acceptedVersion, int currentVersion) {
+  return acceptedVersion == null || acceptedVersion < currentVersion;
+}
+```
+
+未保存（`null`）、または保存済みバージョンが現在より古い場合に `true` を返します。`SharedPreferences` やUIに依存しないため、`test/terms_consent_test.dart` で値の組み合わせだけを検証できます。`utils/purchase_resolution.dart` と同じく「判定ロジックを外部依存から切り離してテストしやすくする」方針です。
+
+### `TermsConsentGate` — 初回描画後に同意を確認するラッパー
+
+```dart
+@override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) => _checkConsent());
+}
+
+@override
+Widget build(BuildContext context) => widget.child;
+```
+
+`StatefulWidget` ですが、`build` は `child` をそのまま返すだけで、自身は何も描画しません。`initState` で `addPostFrameCallback` を使い、最初のフレームの描画が終わってから `_checkConsent` を呼びます。`initState` の最中は `showDialog` を呼べないため、描画後に回しています。
+
+`_checkConsent` は `SharedPreferences` から `kAcceptedTermsVersionKey`（`accepted_terms_version`）を `getInt` で読み、`needsTermsConsent` が `true` ならダイアログを表示します。
+
+```dart
+await showDialog<void>(
+  context: context,
+  barrierDismissible: false,
+  builder: (_) => const _TermsConsentDialog(),
+);
+```
+
+**読込失敗時は未同意扱い。** `SharedPreferences` の読み込みで例外が出た場合は `accepted = null` として扱い、同意ダイアログを表示します（安全側に倒す設計）。非同期処理の後には `if (!mounted) return;` で画面が破棄されていないことを確認しています。
+
+**`barrierDismissible: false`。** ダイアログの外側をタップしても閉じられません。
+
+### `_TermsConsentDialog` — 同意ダイアログ
+
+`PopScope(canPop: false)` で `AlertDialog` を包み、戻るボタンでも閉じられないようにしています。タイトルは「利用規約への同意」で、本文中の「利用規約」「プライバシーポリシー」は `TapGestureRecognizer` を付けた `TextSpan`（下線つき・プライマリ色）のリンクです。
+
+- **リンク（`_open`）：** `launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)` で外部ブラウザを開きます。失敗した場合（戻り値が `false` または例外）は、`mounted` を確認したうえで SnackBar「ページを開けませんでした」を表示します。例外の内容（`e.toString()`）は表示せず汎用文言にするという、プロジェクトルールに沿った実装です。
+- **「同意する」（`_accept`）：** `setInt(kAcceptedTermsVersionKey, kTermsVersion)` で現在のバージョンを保存し、`Navigator.pop` でダイアログを閉じます。保存に失敗しても例外は握りつぶして `pop` するため、その回の利用は継続でき、次回起動時にダイアログが再表示されます。
+- **「同意しない」：** `SystemNavigator.pop()` でアプリを終了します。
+- **リソース解放：** `TapGestureRecognizer` は `initState` で生成し、`dispose` で `_termsTap.dispose()` / `_privacyTap.dispose()` を呼んで破棄します（リーク防止）。
+
+### 起動時の同意確認フロー
+
+```
+アプリ起動 → main.dart → TermsConsentGate（child の ShoppingListScreen をそのまま表示）
+  ↓ 最初のフレーム描画後（addPostFrameCallback）
+_checkConsent：SharedPreferences の accepted_terms_version を読む（失敗時は未同意扱い）
+  ↓ needsTermsConsent(accepted, kTermsVersion)
+false → 何もしない ／ true → _TermsConsentDialog を表示（閉じられない）
+  ↓
+「同意する」→ バージョン保存 → ダイアログを閉じる ／ 「同意しない」→ アプリ終了
+```
 
 ---
 
@@ -1492,7 +1592,19 @@ DatabaseHelper.insertItem / updateItem / insertCategory / importData など（SQ
 state = AsyncData(refreshed) でUI再描画
 ```
 
-バックアップ・共有機能だけは異なる経路を通ります。
+起動時の利用規約の同意確認は、上記とは独立した、`SharedPreferences` だけを使う経路です（詳細は §28）。
+
+```
+アプリ起動
+  ↓
+TermsConsentGate._checkConsent（初回描画後。SharedPreferences の accepted_terms_version を読む）
+  ↓
+needsTermsConsent が true のときだけ _TermsConsentDialog を表示
+  ↓
+「同意する」→ SharedPreferences に kTermsVersion を保存 ／ 「同意しない」→ SystemNavigator.pop() でアプリ終了
+```
+
+バックアップ・共有機能も、上記とは異なる経路を通ります。
 
 ```
 ユーザー操作（バックアップ／共有）
